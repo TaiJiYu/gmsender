@@ -1,0 +1,43 @@
+
+//kage:unit pixels
+package main
+
+var T float
+var FillColor vec4
+var BackColor vec4
+var BoundColor vec4
+
+
+func Fragment(pos vec4, tex vec2, col vec4) vec4 {
+    ltPos,size:=imageSrcRegionOnTexture()
+    uv := tex - ltPos
+    b,c := roundRect(uv,5,size)
+    return b*BoundColor+ mix(BackColor,FillColor,step(uv.x,size.x*T))*c
+}
+
+// 实心条2,uv不是归一化uv，是像素为单位的uv，左上角为0
+// bound是边界尺寸,单位是像素，size是总绘制尺寸，单位为像素
+// 返回向量边界的遮罩和内容的遮罩
+func roundRect(uv vec2,bound float,size vec2)(float,float){
+    radius := 0.5*size.y // 半圆的直径
+    // 取较小值的uv
+    m := min(uv,size-uv)
+    // 中间遮罩
+    mid := step(radius,m.x)
+    // 边界区域遮罩
+    k := step(bound,m.y)
+    // 中间的边界遮罩
+    midB := (1-k)*mid
+    // 中间的内容遮罩
+    midC := k*mid
+    // 两侧遮罩
+    lr := 1-mid
+    d := distance(m,vec2(radius))
+    lrC := step(d,radius-bound) // 两侧的内容
+    lrB := step(d,radius) - lrC // 两侧的边界遮罩
+    //边界
+    b := lrB*lr+midB
+    // 内容
+    c := lrC*lr+midC
+    return b,c
+}

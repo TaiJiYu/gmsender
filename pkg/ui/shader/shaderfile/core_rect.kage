@@ -1,0 +1,27 @@
+//kage:unit pixels
+package main
+
+var FillColor vec4
+var BoundColor vec4
+
+func Fragment(pos vec4, tex vec2, col vec4) vec4 {
+    ltPos,size:=imageSrcRegionOnTexture()
+    uv := tex - ltPos
+    b,c := roundCoreRect(uv,5,size,20)
+    return b*BoundColor+c*FillColor
+}
+
+// roundCoreRect是圆角矩形，只有4角有小弧度，并不是两侧完全的圆
+// 实心条2,uv不是归一化uv，是像素为单位的uv，左上角为0
+// bound是边界尺寸,单位是像素，size是总绘制尺寸，单位为像素,coreRadius是四角的圆半径
+// 返回向量边界的遮罩和内容的遮罩
+func roundCoreRect(uv vec2,bound float,size vec2,coreRadius float)(float,float){
+    uv = size/2-abs(uv-size/2)// 让uv关于中心对称
+    dis := distance(uv,vec2(coreRadius))    
+    sxy := step(uv,vec2(coreRadius)) // (sx,sy)
+    srxy := sxy*(coreRadius-uv-1.0)
+    sxy1 := sxy-1
+    c := sxy.x*sxy.y*(dis*step(dis,coreRadius)-1)-srxy.x*sxy1.y-srxy.y*sxy1.x+1
+    b := sign(step(coreRadius-bound,c))       
+    return b,sign(c)-b
+}
