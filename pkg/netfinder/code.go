@@ -104,7 +104,6 @@ func (f *finder) nodeDecode(data []byte) {
 	if len(data) < 1 {
 		return
 	}
-	fmt.Println(Id(), "node收到了消息", data)
 	order := decodeOrder(data[0])
 	switch order {
 	case masterAnswerFilesNetOrder:
@@ -128,12 +127,9 @@ func (f *finder) masterAnswerFiles() {
 	} else {
 		filesOrdBytes := append([]byte{byte(masterAnswerFilesNetOrder)}, dataFiles...)
 		for i := 0; i < 3; i++ {
-			if _, err := f.multicastCoon.Write(filesOrdBytes); err != nil {
+			if _, err := f.multicastCoon.WriteToUDP(filesOrdBytes, broadcastAddr); err != nil {
 				time.Sleep(time.Second)
 				continue
-			} else {
-				//
-				fmt.Println("master发送了信息同步")
 			}
 			break
 		}

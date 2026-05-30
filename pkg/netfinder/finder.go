@@ -302,9 +302,9 @@ func (f *finder) downLoadFile(dstinfo baseInfo, dstFileName, saveFileName string
 // 停止询问环节
 func (f *finder) closeAsk() {
 	f.chanCloseOnce.Do(func() {
+		f.isClose.Store(true)
 		close(f.askMasterChan)
 		close(f.multicastListenerOutChan)
-		f.isClose.Store(true)
 	})
 }
 func (f *finder) saveMasterInfo(info baseInfo) {
@@ -409,7 +409,6 @@ func askWait(t time.Duration) {
 
 // 保存master信息
 func receivedMasterAnwer(info baseInfo) {
-	fmt.Println("收到了master回复", info)
 	defaultFinder().saveMasterInfo(info)
 }
 
