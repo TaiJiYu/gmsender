@@ -143,6 +143,7 @@ func (f *finder) masterDecode(data []byte) {
 		return
 	}
 	order := decodeOrder(data[0])
+	fmt.Println("收到指令", order)
 	switch order {
 	case askMasterNetOrder:
 		//  询问指令
@@ -152,14 +153,15 @@ func (f *finder) masterDecode(data []byte) {
 		f.masterAnswerFiles()
 	case publicFileNetOrder:
 		// 收到了节点的公开请求
+		fmt.Println("收到公布文件开始")
 		file := File{}
 		if err := json.Unmarshal(data[1:], &file); err != nil {
 			// 文件有问题
 			return
 		}
+		fmt.Println("收到公布文件解码完成")
 		if newfiles, change := f.appendFile(file); change {
 			// 保存后通知其他节点
-			fmt.Println("收到发布并刷新")
 			filesCallback(newfiles)
 			f.masterAnswerFiles()
 		}

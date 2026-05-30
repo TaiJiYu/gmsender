@@ -17,7 +17,6 @@ func TestFileName(t *testing.T) {
 	}
 	fmt.Println(publicSelfFileBytes(fileS))
 }
-
 func TestMask(t *testing.T) {
 	fmt.Printf("%08b\n", afterMask)
 	fmt.Printf("%08b\n", netOrderMask)
@@ -164,11 +163,15 @@ func TestUDP(t *testing.T) {
 
 func TestBuffer(t *testing.T) {
 
-	b := bytes.NewBuffer(make([]byte, 10))
-
+	b := bytes.NewBuffer(make([]byte, 2))
+	o := bytes.NewReader([]byte{1, 2, 3})
 	b.Reset()
-	fmt.Println(b.Len(), b.Cap())
-	b.Write(make([]byte, 20))
+	io.Copy(b, o)
+	fmt.Println(b.Bytes())
+	oo := bytes.NewReader([]byte{4, 5})
+	b.Reset()
+	io.Copy(b, oo)
+	fmt.Println(b.Bytes())
 	fmt.Println(b.Len(), b.Cap())
 
 }
