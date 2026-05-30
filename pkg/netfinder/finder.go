@@ -23,8 +23,8 @@ type finder struct {
 
 	lastWaitSec time.Duration // 剩余询问等待时间
 
-	masterInfo baseInfo
-	masterAddr *net.UDPAddr
+	masterInfo          baseInfo
+	masterbroadcastAddr *net.UDPAddr // 应该是master的广播通信地址，而非master的tcp通信地址
 
 	selfIsMaster atomic.Bool // 自己是否是master
 
@@ -309,7 +309,7 @@ func (f *finder) closeAsk() {
 }
 func (f *finder) saveMasterInfo(info baseInfo) {
 	f.masterInfo = info
-	f.masterAddr, _ = net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%s", info.Ip, info.Port)) // 组播公用地址
+	f.masterbroadcastAddr, _ = net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%s", info.Ip, broadcastPort)) // 广播公用地址
 }
 
 // 删除公开文件
@@ -320,7 +320,7 @@ func (f *finder) delPublicFile(file File) {
 		go f.masterAnswerFiles()
 	} else {
 		// 自己是节点
-		go f.multicastCoon.WriteToUDP(delPublicSelfFileBytes(file), f.masterAddr)
+		go f.multicastCoon.WriteToUDP(delPublicSelfFileBytes(file), f.masterbroadcastAddr)
 	}
 }
 
@@ -340,10 +340,7 @@ func (f *finder) publicFile(filename string) {
 		}
 	} else {
 		// 自己是节点
-		go func() {
-			fmt.Println(f.masterAddr)
-			fmt.Println(f.multicastCoon.WriteToUDP(publicSelfFileBytes(fileS), f.masterAddr))
-		}()
+		go f.multicastCoon.WriteToUDP(publicSelfFileBytes(fileS), f.masterbroadcastAddr)
 	}
 }
 
@@ -356,7 +353,7 @@ func (f *finder) beNode() {
 	go func() {
 		// 询问当前的公开文件,3次重试
 		for i := 0; i < 3; i++ {
-			if _, err := f.multicastCoon.WriteTo(askFilesBytes(), f.masterAddr); err != nil {
+			if _, err := f.multicastCoon.WriteTo(askFilesBytes(), f.masterbroadcastAddr); err != nil {
 				time.Sleep(time.Second)
 				continue
 			}
