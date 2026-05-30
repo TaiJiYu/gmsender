@@ -157,9 +157,10 @@ func (f *finder) masterDecode(data []byte) {
 			// 文件有问题
 			return
 		}
-		if _, change := f.appendFile(file); change {
+		if newfiles, change := f.appendFile(file); change {
 			// 保存后通知其他节点
-			filesCallback(f.readFiles())
+			fmt.Println("收到发布并刷新")
+			filesCallback(newfiles)
 			f.masterAnswerFiles()
 		}
 
