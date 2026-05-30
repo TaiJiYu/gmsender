@@ -409,6 +409,7 @@ func askWait(t time.Duration) {
 
 // 保存master信息
 func receivedMasterAnwer(info baseInfo) {
+	fmt.Println("收到了master回复", info)
 	defaultFinder().saveMasterInfo(info)
 }
 
