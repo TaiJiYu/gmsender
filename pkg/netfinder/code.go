@@ -47,10 +47,12 @@ func masterAnswerBytes() []byte {
 }
 
 func decode(data []byte) bool {
+
 	if len(data) < 1 {
 		return false
 	}
 	order := decodeOrder(data[0])
+	fmt.Println("收到了指令s", order)
 	info := baseInfo{}
 	err := json.Unmarshal(data[1:], &info)
 	if err != nil {

@@ -161,16 +161,15 @@ func (f *finder) multicastListener() {
 
 	// 监听线程
 	go func() {
-		buf := bytes.NewBuffer(make([]byte, 32*1024)) // 32kB缓存
+		buf := make([]byte, 32*1024) // 32kB缓存
 		{
 		loop:
 			for {
-				buf.Reset()
-				_, err := io.Copy(buf, conn)
+				n, err := conn.Read(buf)
 				if err != nil {
 					continue
 				}
-				if decode(buf.Bytes()) {
+				if decode(buf[:n]) {
 					// 收到master回复并退出监听，自己不是master，但保留通信组播监听，用于接受之后的组播消息
 					f.closeAsk()
 					f.beNode()
@@ -364,15 +363,14 @@ func (f *finder) beNode() {
 			break
 		}
 
-		buf := bytes.NewBuffer(make([]byte, 32*1024)) // 32kB缓存
+		buf := make([]byte, 32*1024) // 32kB缓存
 
 		for {
-			buf.Reset()
-			_, err := io.Copy(buf, f.multicastCoon)
+			n, err := f.multicastCoon.Read(buf)
 			if err != nil {
 				continue
 			}
-			f.nodeDecode(buf.Bytes())
+			f.nodeDecode(buf[:n])
 		}
 
 	}()
@@ -388,15 +386,14 @@ func (f *finder) beMaster() {
 	// 成为master后需要继续监听组播消息，给其他人回复master信息
 	// 监听线程
 	go func() {
-		buf := bytes.NewBuffer(make([]byte, 32*1024)) // 32kB缓存
+		buf := make([]byte, 32*1024) // 32kB缓存
 
 		for {
-			buf.Reset()
-			_, err := io.Copy(buf, f.multicastCoon)
+			n, err := f.multicastCoon.Read(buf)
 			if err != nil {
 				continue
 			}
-			f.masterDecode(buf.Bytes())
+			f.masterDecode(buf[:n])
 		}
 	}()
 }
