@@ -143,11 +143,11 @@ func (f *finder) masterDecode(data []byte) {
 		return
 	}
 	order := decodeOrder(data[0])
+	fmt.Println("收到指令：", order)
 	switch order {
 	case askMasterNetOrder:
 		//  询问指令
-		fmt.Println(Id(), "回复：")
-		fmt.Println(f.multicastCoon.WriteToUDP(masterAnswerBytes(), broadcastAddr))
+		f.multicastCoon.WriteToUDP(masterAnswerBytes(), broadcastAddr)
 	case askFilesNetOrder:
 		// 收到询问文件列表消息
 		f.masterAnswerFiles()
