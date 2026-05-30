@@ -152,19 +152,15 @@ func (f *finder) masterDecode(data []byte) {
 		f.masterAnswerFiles()
 	case publicFileNetOrder:
 		// 收到了节点的公开请求
-		fmt.Println("收到公布文件指令开始解析")
 		file := File{}
 		if err := json.Unmarshal(data[1:], &file); err != nil {
 			// 文件有问题
 			return
 		}
-		fmt.Println("收到公布文件指令：", file)
 		if _, change := f.appendFile(file); change {
 			// 保存后通知其他节点
+			filesCallback(f.readFiles())
 			f.masterAnswerFiles()
-			fmt.Println("收到公布文件指令并同步")
-		} else {
-			fmt.Println("收到公布文件指令不同步")
 		}
 
 	case delfPublicFileNetOrder:
