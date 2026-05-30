@@ -12,9 +12,8 @@ func main() {
 	ebiten.SetTPS(utils.BigTPS)
 	ebiten.SetScreenClearedEveryFrame(false)
 	ebiten.SetWindowDecorated(false)
-	if err := ebiten.RunGameWithOptions(gmsender.NewGMSender(), &ebiten.RunGameOptions{
+	ebiten.RunGameWithOptions(gmsender.NewGMSender(), &ebiten.RunGameOptions{
 		ScreenTransparent: true,
-	}); err != nil {
-		panic(err)
-	}
+	})
+	// netfinder.Close()
 }
