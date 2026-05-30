@@ -1,10 +1,10 @@
 package gmsender
 
 import (
-	"fmt"
 	"gmsender/pkg/asset"
 	gametime "gmsender/pkg/game_time"
 	"gmsender/pkg/input"
+	"gmsender/pkg/netfinder"
 	statemachine "gmsender/pkg/state_machine"
 	"gmsender/pkg/ui"
 	"gmsender/utils"
@@ -14,7 +14,6 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
-	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
 type gmsenderCli struct {
@@ -33,7 +32,7 @@ type gmsenderCli struct {
 
 	filesVbox *ui.VerticalBox // 文件列表
 
-	id string // 本机id
+	// id string // 本机id
 
 	smallState statemachine.StateMachineWithDrawI // 缩小状态机
 
@@ -50,7 +49,8 @@ var (
 )
 
 const (
-	bigState     = iota // 放大状态
+	loadingState = iota // 加载状态
+	bigState            // 放大状态
 	toSmallState        // 正在缩小
 	smallState          // 已经缩小了
 	toBigState          // 正在放大
@@ -78,18 +78,13 @@ func NewGMSender() *gmsenderCli {
 		sendercli.smallCacheImg.DrawImage(asset.SmallBallImg(), utils.CopyDrawImageOp)
 		sendercli.smallWeekdayText.Draw(sendercli.smallCacheImg)
 
-		sendercli.id, _ = gonanoid.New(8)
-		if sendercli.id == "" {
-			sendercli.id = "???"
-		}
-
 		sendercli.canvas = ui.NewCoreRectCanvasUi(utils.ZeroPoint, utils.LL, backColor, 0)
 		sendercli.canvas.AddKid(ui.NewSizeBox(utils.NewPoint(utils.LogicalSizeX, utils.LogicalSizeY)))
 
 		sendercli.topCanvas = ui.NewEmptyCanvasUi(utils.ZeroPoint, utils.LL, 20)
 		// 顶部栏位分左右部分，左侧是客户端id，右侧是缩小和关闭
 		hBox := ui.NewHorizontalBox(20)
-		hBox.AddKid(ui.NewStaticTextUiAsKid("ID:"+sendercli.id, ui.SmallSize, idTextColor))
+		idText := hBox.AddKid(ui.NewStaticTextUiAsKid("ID:???", ui.SmallSize, idTextColor)).(*ui.TextUi)
 		sendercli.topCanvas.AddKid(hBox)
 
 		sendercli.closeButton = ui.NewButton(asset.CloseImg(), utils.NewPoint(utils.LogicalSizeX, 0).Sub(utils.NewPoint(20, -20)).Sub(utils.NewPoint(asset.CloseImg().Bounds().Dx()/2, -asset.CloseImg().Bounds().Dy()/2)), utils.MM, gametime.BigTimerType)
@@ -108,7 +103,7 @@ func NewGMSender() *gmsenderCli {
 		choseCanvas := vBox.AddKid(ui.NewRoundLerpRectCanvasUiAsKid(choiseColor, choiseColor, 10).LockSize(utils.NewPoint(fileListX, 20)))
 		sendercli.choseFileButton = ui.NewButtonByCanvas(choseCanvas.(*ui.CanvasUi), choiseColor, choiseColor, gametime.BigTimerType) // 选择文件公开按钮
 		sendercli.choseFileButton.SetCheckKey(input.GameMainReleasedAction, func(bu *ui.ButtonUi) {
-			fmt.Println("选择文件")
+			netfinder.PublicFile(utils.OpenWinChooseFile())
 		})
 		choseCanvas.(*ui.CanvasUi).AddKid(ui.NewStaticTextUiAsKid("十 选择文件公开给别人", ui.SmallSize, choiseTextColor).AddSpaceToSizeX(utils.LogicalSizeX - 40*2))
 		filescanvas := ui.NewCoreRectCanvasUiAsKid(fileListBackColor, 10).LockSize(utils.NewPoint(fileListX, utils.LogicalSizeY-20-60-20-10-40)) // 文件列表框
@@ -124,6 +119,60 @@ func NewGMSender() *gmsenderCli {
 
 		// 缩小状态机
 		sendercli.smallState = statemachine.NewStateMachineWithDraw(gametime.BigTimerType)
+
+		loadingTexts := []*ui.TextUi{
+			ui.NewStaticTextUi(".", ui.BigSize, utils.LogicalSize.Divf1(2), utils.MM, color.White),
+			ui.NewStaticTextUi("..", ui.BigSize, utils.LogicalSize.Divf1(2), utils.MM, color.White),
+			ui.NewStaticTextUi("...", ui.BigSize, utils.LogicalSize.Divf1(2), utils.MM, color.White),
+			ui.NewStaticTextUi("网络错误，启动失败..", ui.MidSize, utils.LogicalSize.Divf1(2), utils.MM, color.White),
+		}
+		loadingCanvas := ui.NewCoreRectCanvasUi(utils.ZeroPoint, utils.LL, backColor, 0).LockSize(utils.LogicalSize)
+		loadingChangeSec := (500 * time.Millisecond).Seconds()
+		loadingTimeLimit := (30 * time.Second).Seconds()
+		loadingCheckTImeMin := (5 * time.Second).Seconds()
+		isFaile := false
+		// 加载状态
+		sendercli.smallState.NewState(loadingState).SetEnterFunc(func() {
+			go netfinder.Init()
+		}).SetExitFunc(func() {
+			clear(loadingTexts)
+			loadingTexts = nil
+			idText.SetText("ID:" + netfinder.Id())
+		}).BindUD(func() {
+			gametime.BigTimeRun()
+			sendercli.moveScreen()
+
+			t := sendercli.smallState.ReadStateLastTimeSec()
+
+			if t > loadingTimeLimit {
+				// 启动超时
+				input.InputUpdate()
+				sendercli.closeButton.Update(utils.NewPoint(ebiten.CursorPosition()))
+			}
+			if t > loadingCheckTImeMin {
+				if done, err := netfinder.IsInitDone(); err != nil {
+					isFaile = true
+				} else if done {
+					sendercli.smallState.Go(bigState)
+				}
+			}
+		}, func(screen *ebiten.Image) {
+			screen.Clear()
+			loadingCanvas.Draw(screen)
+
+			if isFaile {
+				loadingTexts[3].Draw(screen)
+			} else {
+				t := int(sendercli.smallState.ReadStateLastTimeSec()/loadingChangeSec) % 3
+				loadingTexts[t].Draw(screen)
+			}
+
+			if sendercli.smallState.ReadStateLastTimeSec() > loadingTimeLimit || isFaile {
+				// 启动超时
+				sendercli.closeButton.Draw(screen)
+			}
+		})
+
 		sendercli.smallState.NewState(bigState).SetEnterFunc(func() {
 			sendercli.sizex = utils.LogicalSizeX
 			sendercli.sizey = utils.LogicalSizeY
@@ -192,7 +241,6 @@ func NewGMSender() *gmsenderCli {
 					sendercli.lastMouseTick = now
 				}
 			}
-
 			sendercli.moveScreen()
 
 		}, func(screen *ebiten.Image) {
@@ -219,7 +267,7 @@ func NewGMSender() *gmsenderCli {
 		sendercli.smallState.SToSWithTimeLimit(toSmallState, smallState, smallTime)
 		sendercli.smallState.SToSWithTimeLimit(toBigState, bigState, smallTime)
 
-		sendercli.smallState.Go(bigState)
+		sendercli.smallState.Go(loadingState)
 	})
 
 	return sendercli
@@ -239,13 +287,11 @@ func (s *gmsenderCli) moveScreen() {
 		scale := ebiten.Monitor().DeviceScaleFactor()
 		s.mousePressPosX = int(float64(s.mousePressPosX)/scale) + s.screenX
 		s.mousePressPosY = int(float64(s.mousePressPosY)/scale) + s.screenY
-
 		s.screenDroping = true
-		return
-	} else if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
+	}
+	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
 		// 松开
 		s.screenDroping = false
-
 	}
 	if s.screenDroping {
 		screenX, screenY := ebiten.WindowPosition()

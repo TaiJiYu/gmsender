@@ -28,7 +28,10 @@ type finder struct {
 
 	selfIsMaster atomic.Bool // 自己是否是master
 
+	isInitDoneB   atomic.Bool  // 是否初始化完成
 	multicastCoon *net.UDPConn // 组播监听链接
+
+	finderErr error
 
 	// nodes []baseInfo // 所有节点的信息，包含自身和master，所有节点与master同步
 	files []file // 公开的文件列表
@@ -55,11 +58,9 @@ func defaultFinder() *finder {
 	return finderCli
 }
 
-func (f *finder) closeNetFinder() {
-	close(f.ptopTcpOutChan)
-	if f.multicastCoon != nil {
-		f.multicastCoon.Close()
-	}
+// 返回是否初始化完成和是否有错误
+func (f *finder) isInitDone() (bool, error) {
+	return f.isInitDoneB.Load(), f.finderErr
 }
 
 // 自身的点对点通信监听
@@ -67,9 +68,9 @@ func (f *finder) pTopTcpListener() {
 	// 端口写 0，系统自动分配
 	lister, err := net.Listen("tcp", fmt.Sprintf("%s:0", getLocalIp()))
 	if err != nil {
-		panic(err)
+		f.finderErr = err
+		return
 	}
-
 	selfTcpPort = lister.Addr().(*net.TCPAddr).Port
 	go func() {
 		for {
@@ -89,6 +90,79 @@ func (f *finder) pTopTcpListener() {
 
 		}
 	}()
+}
+
+// 组播监听
+func (f *finder) multicastListener() {
+	// 绑定本地端口接收组播
+	conn, err := net.ListenMulticastUDP("udp", nil, multicastAddr)
+	if err != nil {
+		panic(err)
+	}
+	f.multicastCoon = conn
+	// 监听线程
+	go func() {
+		buf := make([]byte, 128)
+		{
+		loop:
+			for {
+				n, _, err := conn.ReadFromUDP(buf)
+				if err != nil {
+					continue
+				}
+				if decode(buf[:n]) {
+					// 收到master回复并退出监听，自己不是master，但保留通信组播监听，用于接受之后的组播消息
+					f.closeAsk()
+					f.beNode()
+					break
+				}
+				select {
+				case <-f.multicastListenerOutChan:
+					// 没收到master回复但是收到了退出信号，自己成为master
+					f.closeAsk()
+					break loop
+				default:
+				}
+			} // loop结束
+		}
+	}()
+}
+
+// 询问master线程
+func (f *finder) askMaster() {
+	// 询问线程
+	go func() {
+		{
+		loop:
+			for i := 0; i < 3; i++ {
+				f.multicastCoon.Write(askMasterBytes())
+				time.Sleep(time.Second)
+				f.lastWaitSec -= time.Second
+				select {
+				case waitTime, ok := <-f.askMasterChan:
+					if ok {
+						time.Sleep(waitTime)
+					} else {
+						// 通道已经关闭，被监听线程关闭
+						break loop
+					}
+				default:
+				}
+				if i == 2 {
+					// 最后一次循环，如果是最后一次循环，则自己成为master
+					f.closeAsk()
+					f.beMaster()
+				}
+			}
+		} // loop标签结束
+	}()
+}
+
+func (f *finder) closeNetFinder() {
+	close(f.ptopTcpOutChan)
+	if f.multicastCoon != nil {
+		f.multicastCoon.Close()
+	}
 }
 
 // 收到其他用户的下载请求
@@ -165,72 +239,6 @@ func (f *finder) downLoadFile(dstinfo baseInfo, dstFileName, saveFileName string
 	}()
 }
 
-// 组播监听
-func (f *finder) multicastListener() {
-	// 绑定本地端口接收广播
-	conn, err := net.ListenMulticastUDP("udp", nil, multicastAddr)
-	if err != nil {
-		panic(err)
-	}
-	f.multicastCoon = conn
-	// 监听线程
-	go func() {
-		buf := make([]byte, 128)
-		{
-		loop:
-			for {
-				n, _, err := conn.ReadFromUDP(buf)
-				if err != nil {
-					continue
-				}
-				if decode(buf[:n]) {
-					// 收到master回复并退出监听，自己不是master，但保留通信组播监听，用于接受之后的组播消息
-					f.closeAsk()
-					f.beNode()
-					break
-				}
-				select {
-				case <-f.multicastListenerOutChan:
-					// 没收到master回复但是收到了退出信号，自己成为master
-					f.closeAsk()
-					break loop
-				default:
-				}
-			} // loop结束
-		}
-	}()
-}
-
-// 询问master线程
-func (f *finder) askMaster() {
-	// 询问线程
-	go func() {
-		{
-		loop:
-			for i := 0; i < 3; i++ {
-				f.multicastCoon.Write(askMasterBytes())
-				time.Sleep(time.Second)
-				f.lastWaitSec -= time.Second
-				select {
-				case waitTime, ok := <-f.askMasterChan:
-					if ok {
-						time.Sleep(waitTime)
-					} else {
-						// 通道已经关闭，被监听线程关闭
-						break loop
-					}
-				default:
-				}
-				if i == 2 {
-					// 最后一次循环，如果是最后一次循环，则自己成为master
-					f.closeAsk()
-					f.beMaster()
-				}
-			}
-		} // loop标签结束
-	}()
-}
-
 // 停止询问环节
 func (f *finder) closeAsk() {
 	f.chanCloseOnce.Do(func() {
@@ -247,6 +255,7 @@ func (f *finder) saveMasterInfo(info baseInfo) {
 // 作为一个节点监听信息
 func (f *finder) beNode() {
 	f.selfIsMaster.Store(false)
+	f.isInitDoneB.Store(true)
 	// 监听线程
 	go func() {
 		// 询问当前的公开文件,3次重试
@@ -275,6 +284,7 @@ func (f *finder) beNode() {
 func (f *finder) beMaster() {
 	f.saveMasterInfo(readSelfBaseInfo())
 	f.selfIsMaster.Store(true)
+	f.isInitDoneB.Store(true)
 
 	// 成为master后需要继续监听组播消息，给其他人回复master信息
 	// 监听线程
