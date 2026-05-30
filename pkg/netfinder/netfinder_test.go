@@ -8,6 +8,72 @@ import (
 	"testing"
 )
 
+func TestNet(t *testing.T) {
+	castAddr, _ := net.ResolveUDPAddr("", "255.255.255.255:1999") // 广播公用地址
+	listenAddr, _ := net.ResolveUDPAddr("", ":1999")
+
+	// 发送端
+	sendConn, err := net.ListenUDP("udp", listenAddr)
+	if err != nil {
+		panic(err)
+	}
+	// 接收句柄
+	cieveConn, err := net.ListenUDP("udp", listenAddr)
+	if err != nil {
+		panic(err)
+	}
+
+	// 接收
+	go func() {
+		buf := make([]byte, 128)
+		n, err := cieveConn.Read(buf)
+		fmt.Println("接受：", buf[:n], err)
+	}()
+
+	// 发送
+	go func() {
+		n, err := sendConn.WriteToUDP([]byte("hello"), castAddr)
+		fmt.Println("发送：", n, err)
+	}()
+
+	<-make(chan bool)
+
+}
+
+func TestMulNet(t *testing.T) {
+	castAddr, _ := net.ResolveUDPAddr("", "224.0.0.251:1999") // 广播公用地址
+	// listenAddr, _ := net.ResolveUDPAddr("", ":1999")
+
+	// 发送端
+	sendConn, err := net.ListenMulticastUDP("udp", nil, castAddr)
+	if err != nil {
+		panic(err)
+	}
+	// // 接收句柄
+	// cieveConn, err := net.ListenUDP("udp", listenAddr)
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	// 接收
+	go func() {
+		buf := make([]byte, 128)
+		n, err := sendConn.Read(buf)
+		fmt.Println("接受：", buf[:n], err)
+	}()
+
+	// 发送
+	go func() {
+		// 需要多个"连接"时，创建新的 UDPConn
+		sendConn, _ := net.DialUDP("udp", nil, castAddr)
+		n, err := sendConn.Write([]byte("hello")) // 专门用于组播发送
+		fmt.Println("发送：", n, err)
+	}()
+
+	<-make(chan bool)
+
+}
+
 func TestCode(t *testing.T) {
 	bs := askMasterBytes()
 	fmt.Println("ask 长度:", len(bs), "B")

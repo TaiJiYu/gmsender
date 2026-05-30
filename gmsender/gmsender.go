@@ -110,9 +110,6 @@ func NewGMSender() *gmsenderCli {
 
 		sendercli.filesVbox = ui.NewVerticalBox(10)
 
-		sendercli.filesVbox.AddKid(fileListCli.AddFile(true, "hahha", "aaa"))
-		sendercli.filesVbox.AddKid(fileListCli.AddFile(false, "asdasd", "oooo"))
-
 		filescanvas.AddKid(sendercli.filesVbox)
 		vBox.AddKid(filescanvas)
 		sendercli.midCanvas.AddKid(vBox)
@@ -133,7 +130,7 @@ func NewGMSender() *gmsenderCli {
 		isFaile := false
 		// 加载状态
 		sendercli.smallState.NewState(loadingState).SetEnterFunc(func() {
-			go netfinder.Init()
+			go netfinder.Init(sendercli.refreshFiles)
 		}).SetExitFunc(func() {
 			clear(loadingTexts)
 			loadingTexts = nil
@@ -271,6 +268,16 @@ func NewGMSender() *gmsenderCli {
 	})
 
 	return sendercli
+}
+
+// 刷新文件展示
+func (s *gmsenderCli) refreshFiles(files []netfinder.File) {
+	fileListCli.refreshFiles(files)
+}
+
+// 添加一个文件到列表展示
+func appendFileCmp(f *ui.CanvasUi) {
+	sendercli.filesVbox.AddKid(f)
 }
 
 // 刷新公开文件列表展示

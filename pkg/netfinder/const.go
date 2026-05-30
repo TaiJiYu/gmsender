@@ -9,7 +9,8 @@ import (
 // 基础常量
 
 var (
-	multicastAddr, _ = net.ResolveUDPAddr("", "239.198.239.137:1999") // 组播公用地址
-	id, _            = gonanoid.New(8)                                // 本机id
-	ptopTcpAddr, _   = net.ResolveTCPAddr("", ":0")                   // 点对点通信的tcp地址
+	broadcastListenAddr, _ = net.ResolveUDPAddr("", ":1999")                // 本地监听
+	broadcastAddr, _       = net.ResolveUDPAddr("", "255.255.255.255:1999") // 广播公用地址
+	id, _                  = gonanoid.New(8)                                // 本机id
+	ptopTcpAddr, _         = net.ResolveTCPAddr("", ":0")                   // 点对点通信的tcp地址
 )

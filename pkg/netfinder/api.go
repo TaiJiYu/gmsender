@@ -1,6 +1,12 @@
 package netfinder
 
-func Init() {
+var (
+	filesCallback func(files []File)
+)
+
+// filesCallback文件同步回调，公开文件有更新时调用
+func Init(filesCallbackFunc func(files []File)) {
+	filesCallback = filesCallbackFunc
 	defaultFinder()
 }
 
@@ -20,7 +26,12 @@ func PublicFile(filename string) {
 	if filename == "" {
 		return
 	}
+	defaultFinder().publicFile(filename)
+}
 
+// 删除公开文件
+func DelPublicFile(file File) {
+	defaultFinder().delPublicFile(file)
 }
 
 // 下载文件

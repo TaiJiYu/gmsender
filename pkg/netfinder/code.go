@@ -14,6 +14,8 @@ const (
 	downLoadFileNetOrder                                 // 请求文件下载
 	askFilesNetOrder                                     // 询问公开文件列表
 	masterAnswerFilesNetOrder                            // master回复公开文件列表
+	publicFileNetOrder                                   // 公开自己的文件
+	delfPublicFileNetOrder                               // 删除自己的公开文件
 )
 
 const (
@@ -73,6 +75,18 @@ func askFilesBytes() []byte {
 	return []byte{header}
 
 }
+func publicSelfFileBytes(f File) []byte {
+	header := byte(publicFileNetOrder)
+	data, _ := json.Marshal(f)
+	return append([]byte{header}, data...)
+}
+
+// 删除自己的公开文件
+func delPublicSelfFileBytes(f File) []byte {
+	header := byte(delfPublicFileNetOrder)
+	data, _ := json.Marshal(f)
+	return append([]byte{header}, data...)
+}
 
 // 某个节点解码组播消息
 // 返回来源的基础信息和是否需要回复
@@ -80,18 +94,39 @@ func (f *finder) nodeDecode(data []byte) {
 	if len(data) < 1 {
 		return
 	}
+	fmt.Println(Id(), "node收到了消息", data)
 	order := decodeOrder(data[0])
 	switch order {
 	case masterAnswerFilesNetOrder:
 		//  master回复的文件列表
-		files := []file{}
+		files := []File{}
 		err := json.Unmarshal(data[1:], &files)
 		if err != nil {
 			return
 		}
+		f.writeFiles(files)
+		filesCallback(files)
+	}
+}
 
-		f.files = f.files[:0]
-		f.files = append(f.files, files...)
+// master同步所有文件
+func (f *finder) masterAnswerFiles() {
+	files := f.readFiles()
+	if dataFiles, err := json.Marshal(files); err != nil {
+		// 文件列表序列化失败，一般不太可能
+		return
+	} else {
+		filesOrdBytes := append([]byte{byte(masterAnswerFilesNetOrder)}, dataFiles...)
+		for i := 0; i < 3; i++ {
+			if _, err := f.multicastCoon.Write(filesOrdBytes); err != nil {
+				time.Sleep(time.Second)
+				continue
+			} else {
+				//
+				fmt.Println("master发送了信息同步")
+			}
+			break
+		}
 	}
 }
 
@@ -104,23 +139,33 @@ func (f *finder) masterDecode(data []byte) {
 	order := decodeOrder(data[0])
 	switch order {
 	case askMasterNetOrder:
+		fmt.Println(Id(), "master收到了询问")
 		//  询问指令
 		f.multicastCoon.Write(masterAnswerBytes())
 	case askFilesNetOrder:
 		// 收到询问文件列表消息
-		if dataFiles, err := json.Marshal(f.files); err != nil {
-			// 文件列表序列化失败，一般不太可能
+		f.masterAnswerFiles()
+	case publicFileNetOrder:
+		// 收到了节点的公开请求
+		file := File{}
+		if err := json.Unmarshal(data[1:], &file); err != nil {
+			// 文件有问题
 			return
-		} else {
-			filesOrdBytes := append([]byte{byte(masterAnswerFilesNetOrder)}, dataFiles...)
-			for i := 0; i < 3; i++ {
-				if _, err := f.multicastCoon.Write(filesOrdBytes); err != nil {
-					time.Sleep(time.Second)
-					continue
-				}
-				break
-			}
 		}
+		if _, change := f.appendFile(file); change {
+			// 保存后通知其他节点
+			f.masterAnswerFiles()
+		}
+	case delfPublicFileNetOrder:
+		// 收到了删除公开文件的请求
+		file := File{}
+		if err := json.Unmarshal(data[1:], &file); err != nil {
+			// 文件有问题
+			return
+		}
+		f.delFile(file)
+		filesCallback(f.readFiles())
+		f.masterAnswerFiles()
 
 	}
 }

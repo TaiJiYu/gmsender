@@ -34,7 +34,9 @@ type finder struct {
 	finderErr error
 
 	// nodes []baseInfo // 所有节点的信息，包含自身和master，所有节点与master同步
-	files []file // 公开的文件列表
+	fileLock sync.RWMutex      // 文件锁
+	files    []File            // 公开的文件列表
+	filesMap map[File]struct{} // 去重检查
 }
 
 var (
@@ -49,13 +51,69 @@ func defaultFinder() *finder {
 			multicastListenerOutChan: make(chan struct{}, 1),
 			ptopTcpOutChan:           make(chan struct{}, 1),
 			lastWaitSec:              3 * time.Second,
-			files:                    make([]file, 0),
+			files:                    make([]File, 0),
+			filesMap:                 make(map[File]struct{}),
 		}
 		finderCli.pTopTcpListener()
 		finderCli.multicastListener()
 		finderCli.askMaster()
 	})
 	return finderCli
+}
+
+// 读取自己的文件列表
+func (f *finder) readFiles() []File {
+	f.fileLock.RLock()
+	files := make([]File, len(f.files))
+	copy(files, f.files)
+	f.fileLock.RUnlock()
+	return files
+}
+
+// 重写自己的文件列表
+func (f *finder) writeFiles(files []File) {
+	f.fileLock.Lock()
+	f.files = make([]File, len(files))
+	copy(f.files, files)
+	clear(f.filesMap)
+	for i := range files {
+		f.filesMap[files[i]] = struct{}{}
+	}
+	f.fileLock.Unlock()
+}
+
+// 删除files中的文件
+func (f *finder) delFile(file File) {
+	f.fileLock.Lock()
+	defer f.fileLock.Unlock()
+	_, isIn := f.filesMap[file]
+	if isIn {
+		delete(f.filesMap, file)
+		for i := range f.files {
+			if file == f.files[i] {
+				f.files = append(f.files[:i], f.files[i+1:]...)
+				return
+			}
+		}
+	}
+}
+
+// 添加一个文件到列表中,返回全部文件，重复的不会添加，返回是否有变化
+func (f *finder) appendFile(file File) ([]File, bool) {
+	f.fileLock.Lock()
+	defer f.fileLock.Unlock()
+	_, isIn := f.filesMap[file]
+	if isIn {
+		files := make([]File, len(f.files))
+		copy(files, f.files)
+		return files, false
+	} else {
+		f.files = append(f.files, file)
+		f.filesMap[file] = struct{}{}
+		ret := make([]File, len(f.files))
+		copy(ret, f.files)
+		return ret, true
+	}
 }
 
 // 返回是否初始化完成和是否有错误
@@ -95,21 +153,25 @@ func (f *finder) pTopTcpListener() {
 // 组播监听
 func (f *finder) multicastListener() {
 	// 绑定本地端口接收组播
-	conn, err := net.ListenMulticastUDP("udp", nil, multicastAddr)
+	conn, err := net.ListenUDP("udp", broadcastListenAddr)
 	if err != nil {
 		panic(err)
 	}
 	f.multicastCoon = conn
+
 	// 监听线程
 	go func() {
 		buf := make([]byte, 128)
 		{
 		loop:
 			for {
+				fmt.Println("等待接受组播消息")
 				n, _, err := conn.ReadFromUDP(buf)
 				if err != nil {
+					fmt.Println("multicastListener err:", err)
 					continue
 				}
+				fmt.Println("收到了组播消息：", buf[:n])
 				if decode(buf[:n]) {
 					// 收到master回复并退出监听，自己不是master，但保留通信组播监听，用于接受之后的组播消息
 					f.closeAsk()
@@ -135,7 +197,9 @@ func (f *finder) askMaster() {
 		{
 		loop:
 			for i := 0; i < 3; i++ {
-				f.multicastCoon.Write(askMasterBytes())
+				_, err := f.multicastCoon.WriteToUDP(askMasterBytes(), broadcastAddr)
+				fmt.Println(Id(), "尝试询问：", err)
+
 				time.Sleep(time.Second)
 				f.lastWaitSec -= time.Second
 				select {
@@ -252,15 +316,48 @@ func (f *finder) saveMasterInfo(info baseInfo) {
 	f.masterAddr, _ = net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%s", info.Ip, info.Port)) // 组播公用地址
 }
 
+// 删除公开文件
+func (f *finder) delPublicFile(file File) {
+	if f.selfIsMaster.Load() {
+		// 自己是master
+		f.delFile(file)
+		go f.masterAnswerFiles()
+	} else {
+		// 自己是节点
+		go f.multicastCoon.WriteToUDP(delPublicSelfFileBytes(file), f.masterAddr)
+	}
+}
+
+// 公开文件,自己调用了公开本机文件
+func (f *finder) publicFile(filename string) {
+	fileS := File{
+		Ip:       getLocalIp(),
+		Port:     fmt.Sprintf("%v", getLocalTcpPort()),
+		Id:       Id(),
+		FileName: filename,
+	}
+	if f.selfIsMaster.Load() {
+		// 自己master
+		if files, change := f.appendFile(fileS); change {
+			filesCallback(files)
+			go f.masterAnswerFiles()
+		}
+	} else {
+		// 自己是节点
+		go f.multicastCoon.WriteToUDP(publicSelfFileBytes(fileS), f.masterAddr)
+	}
+}
+
 // 作为一个节点监听信息
 func (f *finder) beNode() {
 	f.selfIsMaster.Store(false)
 	f.isInitDoneB.Store(true)
+	fmt.Println("node", Id())
 	// 监听线程
 	go func() {
 		// 询问当前的公开文件,3次重试
 		for i := 0; i < 3; i++ {
-			if _, err := f.multicastCoon.Write(askFilesBytes()); err != nil {
+			if _, err := f.multicastCoon.WriteTo(askFilesBytes(), f.masterAddr); err != nil {
 				time.Sleep(time.Second)
 				continue
 			}
@@ -285,6 +382,7 @@ func (f *finder) beMaster() {
 	f.saveMasterInfo(readSelfBaseInfo())
 	f.selfIsMaster.Store(true)
 	f.isInitDoneB.Store(true)
+	fmt.Println("master", Id())
 
 	// 成为master后需要继续监听组播消息，给其他人回复master信息
 	// 监听线程
@@ -292,6 +390,7 @@ func (f *finder) beMaster() {
 		buf := make([]byte, 128)
 		for {
 			n, _, err := f.multicastCoon.ReadFromUDP(buf)
+			fmt.Println(Id(), "收到了消息", buf, err)
 			if err != nil {
 				continue
 			}

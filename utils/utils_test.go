@@ -10,3 +10,35 @@ func TestFile(t *testing.T) {
 	f := OpenWinChooseFile()
 	fmt.Println("内容：", f, filepath.Dir(f))
 }
+
+func TestList(t *testing.T) {
+	a := []int{}
+
+	b := []int{1, 2, 3}
+
+	a = make([]int, len(b))
+	copy(a, b)
+	fmt.Println(a)
+	a = a[:0]
+	copy(a, b)
+	fmt.Println(a)
+
+}
+
+func TestFileName(t *testing.T) {
+	s := "C:\\Users\\guangmo\\Documents\\Default.rdp"
+	fmt.Println(filepath.Abs(s))
+	fmt.Println(filepath.Base(s))
+	fmt.Println(filepath.Clean(s))
+	fmt.Println(filepath.Dir(s))
+	fmt.Println(filepath.EvalSymlinks(s))
+	fmt.Println(filepath.Ext(s))
+	fmt.Println(filepath.FromSlash(s))
+	fmt.Println(filepath.Glob(s))
+	fmt.Println(filepath.IsAbs(s))
+	fmt.Println(filepath.IsLocal(s))
+	fmt.Println(filepath.Localize(s))
+	fmt.Println(filepath.Split(s))
+	fmt.Println(filepath.ToSlash(s))
+	fmt.Println(filepath.VolumeName(s))
+}
