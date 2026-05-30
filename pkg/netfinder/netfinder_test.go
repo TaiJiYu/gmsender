@@ -8,6 +8,16 @@ import (
 	"testing"
 )
 
+func TestFileName(t *testing.T) {
+	fileS := File{
+		Ip:       getLocalIp(),
+		Port:     fmt.Sprintf("%v", getLocalTcpPort()),
+		Id:       Id(),
+		FileName: "E:\\GMStudioProject\\GMSender\about\\全国计算机技术与软件专业技术资格（水平）考试.pdf",
+	}
+	fmt.Println(publicSelfFileBytes(fileS))
+}
+
 func TestMask(t *testing.T) {
 	fmt.Printf("%08b\n", afterMask)
 	fmt.Printf("%08b\n", netOrderMask)
