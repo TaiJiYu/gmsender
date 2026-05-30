@@ -165,13 +165,10 @@ func (f *finder) multicastListener() {
 		{
 		loop:
 			for {
-				fmt.Println("等待接受组播消息")
 				n, _, err := conn.ReadFromUDP(buf)
 				if err != nil {
-					fmt.Println("multicastListener err:", err)
 					continue
 				}
-				fmt.Println("收到了组播消息：", buf[:n])
 				if decode(buf[:n]) {
 					// 收到master回复并退出监听，自己不是master，但保留通信组播监听，用于接受之后的组播消息
 					f.closeAsk()
@@ -197,8 +194,7 @@ func (f *finder) askMaster() {
 		{
 		loop:
 			for i := 0; i < 3; i++ {
-				_, err := f.multicastCoon.WriteToUDP(askMasterBytes(), broadcastAddr)
-				fmt.Println(Id(), "尝试询问：", err)
+				f.multicastCoon.WriteToUDP(askMasterBytes(), broadcastAddr)
 
 				time.Sleep(time.Second)
 				f.lastWaitSec -= time.Second
@@ -390,7 +386,6 @@ func (f *finder) beMaster() {
 		buf := make([]byte, 128)
 		for {
 			n, _, err := f.multicastCoon.ReadFromUDP(buf)
-			fmt.Println(Id(), "收到了消息", buf, err)
 			if err != nil {
 				continue
 			}

@@ -8,6 +8,10 @@ import (
 	"testing"
 )
 
+func TestMask(t *testing.T) {
+	fmt.Printf("%08b\n", afterMask)
+	fmt.Printf("%08b\n", netOrderMask)
+}
 func TestNet(t *testing.T) {
 	castAddr, _ := net.ResolveUDPAddr("", "255.255.255.255:1999") // 广播公用地址
 	listenAddr, _ := net.ResolveUDPAddr("", ":1999")

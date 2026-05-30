@@ -19,7 +19,8 @@ const (
 )
 
 const (
-	afterMask byte = 0x1f
+	afterMask    byte = 0x1f
+	netOrderMask byte = 0xff - afterMask
 )
 
 // 建联基础信息
@@ -55,11 +56,20 @@ func decode(data []byte) bool {
 	if err != nil {
 		return false
 	}
+	if info.Id == Id() {
+		// 来自自己的消息，直接忽略
+		return false
+	}
 	switch order {
 	case askMasterNetOrder:
 		//  询问指令
-		waitSec := (time.Duration(data[0]&afterMask) + 1) * time.Second
-		askWait(waitSec)
+		if info.Ip > getLocalIp() || info.Id > Id() {
+			// 如果对方ip高于自己或者id大于自己，则放弃选主，直接等待
+			waitSec := (time.Duration(data[0]&afterMask) + 1) * time.Second
+			askWait(waitSec)
+		} else {
+			// 否则不做处理继续询问
+		}
 		return false
 	case masterAnswerNetOrder:
 		// master回复
@@ -137,6 +147,7 @@ func (f *finder) masterDecode(data []byte) {
 		return
 	}
 	order := decodeOrder(data[0])
+	fmt.Println("master", Id(), "受到了消息:", order, data)
 	switch order {
 	case askMasterNetOrder:
 		fmt.Println(Id(), "master收到了询问")
@@ -172,7 +183,7 @@ func (f *finder) masterDecode(data []byte) {
 
 // 解码出指令类型
 func decodeOrder(b byte) netOrder {
-	return netOrder(b >> 5)
+	return netOrder(b & netOrderMask)
 }
 
 // 请求文件下载的信息
