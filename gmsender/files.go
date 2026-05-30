@@ -81,7 +81,7 @@ type fileCmp struct {
 	canvas *ui.CanvasUi
 	button *ui.ButtonUi
 
-	fileNameText, orginText *ui.TextUi
+	fileNameText, orginText, funcText *ui.TextUi //funcText是功能文本
 
 	file netfinder.File
 
@@ -95,6 +95,25 @@ func (f *fileCmp) changeByFile(file netfinder.File) {
 	f.file = file
 	f.fileNameText.SetText(filepath.Base(file.FileName))
 	f.orginText.SetText("-来自[" + file.Id + "]")
+	if f.file.Id == netfinder.Id() {
+		// 自己的
+		f.funcText.SetText("关闭")
+	} else {
+		// 别人的
+		f.funcText.SetText("下载")
+	}
+
+	f.isDel = false
+}
+
+func (f *fileCmp) buttonFunc(bu *ui.ButtonUi) {
+	if f.file.Id == netfinder.Id() {
+		// 自己的
+		f.isDel = true
+	} else {
+		// 别人的
+		fmt.Println("下载")
+	}
 }
 
 // 新建一个文件组件,isSelf为是否是自身的
@@ -112,31 +131,27 @@ func newFileCmp(file netfinder.File) *fileCmp {
 	f.orginText = vbox.AddKid(ui.NewStaticTextUiAsKid("-来自["+file.Id+"]", ui.SmallSize, fileTextColor)).(*ui.TextUi)
 
 	hBox.AddKid(vbox)
+	var funcText string
+	var funcColor color.Color
 	// 接收或者关闭按钮
 	if file.Id == netfinder.Id() {
 		// 自己的文件，关闭按钮
-		closeCanvas := ui.NewRoundLerpRectCanvasUiAsKid(closeFileColor, utils.ColorRGBByOx(0xD93125), 0).LockSize(utils.NewPoint(100, 50))
-		hhbox := ui.NewHorizontalBox(0).LockSize(utils.NewPoint(100, 50))
-		hhbox.AddKid(ui.NewStaticTextUiAsKid("关闭", ui.SmallSize, color.White).AddSpaceToSizeX(100))
-		closeCanvas.AddKid(hhbox)
-		bCa := hBox.AddKid(closeCanvas)
-		f.button = ui.NewButtonByCanvas(bCa.(*ui.CanvasUi), closeFileColor, utils.ColorRGBByOx(0xD93125), gametime.BigTimerType)
-		f.button.SetCheckKey(input.GameMainReleasedAction, func(bu *ui.ButtonUi) {
-			f.isDel = true
-		})
+		funcText = "关闭"
+		funcColor = closeFileColor
 	} else {
 		// 别人的文件，下载按钮
-		downloadCanvas := ui.NewRoundLerpRectCanvasUiAsKid(downloadColor, color.White, 0).LockSize(utils.NewPoint(100, 50))
-		hhbox := ui.NewHorizontalBox(0).LockSize(utils.NewPoint(100, 50))
-		hhbox.AddKid(ui.NewStaticTextUiAsKid("下载", ui.SmallSize, color.White).AddSpaceToSizeX(100))
-		downloadCanvas.AddKid(hhbox)
-		bCa := hBox.AddKid(downloadCanvas)
-		f.button = ui.NewButtonByCanvas(bCa.(*ui.CanvasUi), downloadColor, color.White, gametime.BigTimerType)
-		f.button.SetCheckKey(input.GameMainReleasedAction, func(bu *ui.ButtonUi) {
-			fmt.Println("下载")
-		})
+		funcText = "下载"
+		funcColor = downloadColor
 	}
 
+	funcCanvas := ui.NewRoundLerpRectCanvasUiAsKid(funcColor, color.White, 0).LockSize(utils.NewPoint(100, 50))
+	hhbox := ui.NewHorizontalBox(0).LockSize(utils.NewPoint(100, 50))
+	f.funcText = hhbox.AddKid(ui.NewStaticTextUiAsKid(funcText, ui.SmallSize, color.White).AddSpaceToSizeX(100)).(*ui.TextUi)
+	funcCanvas.AddKid(hhbox)
+	bCa := hBox.AddKid(funcCanvas)
+
+	f.button = ui.NewButtonByCanvas(bCa.(*ui.CanvasUi), closeFileColor, utils.ColorRGBByOx(0xD93125), gametime.BigTimerType)
+	f.button.SetCheckKey(input.GameMainReleasedAction, f.buttonFunc)
 	f.canvas.AddKid(hBox)
 
 	return f
