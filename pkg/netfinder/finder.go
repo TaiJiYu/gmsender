@@ -340,7 +340,10 @@ func (f *finder) publicFile(filename string) {
 		}
 	} else {
 		// 自己是节点
-		go f.multicastCoon.WriteToUDP(publicSelfFileBytes(fileS), f.masterAddr)
+		go func() {
+			fmt.Println(f.masterAddr)
+			fmt.Println(f.multicastCoon.WriteToUDP(publicSelfFileBytes(fileS), f.masterAddr))
+		}()
 	}
 }
 
