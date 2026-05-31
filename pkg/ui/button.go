@@ -4,6 +4,7 @@ import (
 	gametime "gmsender/pkg/game_time"
 	statemachine "gmsender/pkg/state_machine"
 	"gmsender/utils"
+	"image/color"
 
 	"time"
 
@@ -77,6 +78,11 @@ func newButton(render buttonRenderI, pos utils.Point, timer gametime.TimerType) 
 	b.scaleState.Go(buttonScaleDone)
 
 	return b
+}
+func (b *ButtonUi) SetFillColor(c color.Color) {
+	if r, ok := b.buttonRender.(*buttonCanvasRender); ok {
+		r.setFillColor(c)
+	}
 }
 
 type HotKeyI interface {

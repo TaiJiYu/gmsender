@@ -91,6 +91,10 @@ func newCanvasRender(canvas *CanvasUi, staticFillColor, inFillColor color.Color)
 	}
 }
 
+func (b *buttonCanvasRender) setFillColor(c color.Color) {
+	b.canvas.SetFillColor(c)
+}
+
 // 对于画布渲染器，调整缩放系数时，直接修改边缘填充颜色
 func (b *buttonCanvasRender) setScaleK(s float64) {
 	s = (s - 1) * 2

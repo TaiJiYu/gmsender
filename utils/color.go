@@ -31,6 +31,17 @@ func ConvertToGrayscale(img *ebiten.Image) *ebiten.Image {
 	return ret
 }
 
+// 从接口读取颜色，复制颜色，是颜色的备份
+func ColorByColorI(c color.Color) color.Color {
+	r, g, b, a := c.RGBA()
+	return color.RGBA{
+		R: uint8(r >> 8),
+		G: uint8(g >> 8),
+		B: uint8(b >> 8),
+		A: uint8(a >> 8),
+	}
+}
+
 // 仅rgb，a为255
 func ColorRGBByOx(c uint32) color.Color {
 	return color.RGBA{R: uint8(c >> 16), G: uint8(c >> 8 & 0xff), B: uint8(c & 0xff), A: 255}
