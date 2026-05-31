@@ -99,12 +99,12 @@ func (f *fileCmp) changeByFile(file netfinder.File) {
 		// 自己的
 		f.funcText.SetText("关闭")
 		f.funcText.AddSpaceToSizeX(100)
-		f.button.SetFillColor(closeFileColor)
+		f.button.SetFillColor(closeFileColor, closeFileColor)
 	} else {
 		// 别人的
 		f.funcText.SetText("下载")
 		f.funcText.AddSpaceToSizeX(100)
-		f.button.SetFillColor(downloadColor)
+		f.button.SetFillColor(downloadColor, downloadColor)
 	}
 
 	f.isDel = false
@@ -155,7 +155,7 @@ func newFileCmp(file netfinder.File) *fileCmp {
 	f.funcCanvas.AddKid(hhbox)
 	bCa := hBox.AddKid(f.funcCanvas)
 
-	f.button = ui.NewButtonByCanvas(bCa.(*ui.CanvasUi), funcColor, utils.ColorRGBByOx(0xD93125), gametime.BigTimerType)
+	f.button = ui.NewButtonByCanvas(bCa.(*ui.CanvasUi), funcColor, funcColor, gametime.BigTimerType)
 	f.button.SetCheckKey(input.GameMainReleasedAction, f.buttonFunc)
 	f.canvas.AddKid(hBox)
 

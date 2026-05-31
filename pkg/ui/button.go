@@ -79,9 +79,9 @@ func newButton(render buttonRenderI, pos utils.Point, timer gametime.TimerType) 
 
 	return b
 }
-func (b *ButtonUi) SetFillColor(c color.Color) {
+func (b *ButtonUi) SetFillColor(fillColor, inColor color.Color) {
 	if r, ok := b.buttonRender.(*buttonCanvasRender); ok {
-		r.setFillColor(c)
+		r.setFillColor(fillColor, inColor)
 	}
 }
 

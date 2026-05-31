@@ -91,8 +91,10 @@ func newCanvasRender(canvas *CanvasUi, staticFillColor, inFillColor color.Color)
 	}
 }
 
-func (b *buttonCanvasRender) setFillColor(c color.Color) {
-	b.canvas.SetFillColor(c)
+func (b *buttonCanvasRender) setFillColor(fillColor, inColor color.Color) {
+	b.staticFillColor = fillColor
+	b.inFillColor = inColor
+	b.canvas.SetFillColor(fillColor)
 }
 
 // 对于画布渲染器，调整缩放系数时，直接修改边缘填充颜色
