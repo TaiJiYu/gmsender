@@ -417,7 +417,7 @@ func readWaitSec() int {
 
 // 要求等待线程延长等待时间
 func askWait(t time.Duration) {
-	if !defaultFinder().isClose.Load() {
+	if defaultFinder().isClose.Load() {
 		defaultFinder().askMasterChan <- t
 	}
 }
