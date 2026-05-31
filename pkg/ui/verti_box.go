@@ -2,6 +2,8 @@ package ui
 
 import (
 	"gmsender/utils"
+	"image"
+	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -17,6 +19,12 @@ type VerticalBox struct {
 	kidSpace  float64
 	kids      []UICompentI
 	lockSize  bool
+
+	nowSliderF       float64         // 当前滑动位置
+	subRect          image.Rectangle // 遮罩范围
+	sliderYRange     float64         // 滑动y的范围
+	sliderHintCanvas *CanvasUi       // 滑动提示
+	sliderDraw       func(screen *ebiten.Image)
 }
 
 // kidSpace为垂直元素的间隔
@@ -77,6 +85,8 @@ func (h *VerticalBox) AddKid(u UICompentI) UICompentI {
 		h.kids[i].SetPosOffset(h.offset)
 		y = max(y, y+sy+h.kidSpace)
 	}
+
+	h.setSliderRect()
 	return u
 }
 
@@ -111,6 +121,10 @@ func (h *VerticalBox) Size() utils.Point {
 }
 
 func (h *VerticalBox) Draw(screen *ebiten.Image) {
+	if h.sliderDraw != nil {
+		h.sliderDraw(screen)
+		return
+	}
 	switch h.drawOrder {
 	case ADrawOrder:
 		for i := range h.kids {
@@ -126,4 +140,60 @@ func (h *VerticalBox) Draw(screen *ebiten.Image) {
 // 设置渲染顺序,o只影响渲染顺序
 func (h *VerticalBox) SetDrawOrder(o DrawOrder) {
 	h.drawOrder = o
+}
+
+// 滑动距离，正数是展示更多下面的内容
+func (h *VerticalBox) Slider(f float64) {
+	if h.Size().Y <= h.sliderYRange {
+		// 能否展示完全，不能滑动
+		h.offset = h.offset.SubY(-h.nowSliderF)
+		h.nowSliderF = 0
+		h.SetPosOffset(h.offset)
+		return
+	}
+
+	h.nowSliderF += f
+
+	h.offset = h.offset.SubY(f)
+	h.SetPosOffset(h.offset)
+
+	h.setSliderRect()
+}
+
+func (h *VerticalBox) setSliderRect() {
+	llx, lly := h.pos.Add(h.offset).AddY(h.nowSliderF).BreakInt()
+	h.subRect = image.Rect(llx, lly, llx+int(h.Size().X), lly+int(h.sliderYRange))
+	if h.sliderHintCanvas != nil {
+		h.sliderHintCanvas.SetPos(utils.NewPoint(h.subRect.Dx()/2+h.subRect.Min.X, h.subRect.Max.Y-20), utils.MM)
+	}
+
+}
+
+// 检查检查点是否在渲染范围内
+func (h *VerticalBox) CheckMouseInSlider(checkPos utils.Point) bool {
+	return checkPos.IsRangeIn(utils.NewPoint(h.subRect.Min.X, h.subRect.Max.X), utils.NewPoint(h.subRect.Min.Y, h.subRect.Max.Y))
+}
+
+// 设置滑动窗口，超过尺寸则滑动
+func (h *VerticalBox) SetSlider(sizeY float64, hintColor color.Color) {
+	h.sliderYRange = sizeY
+	screenCache := ebiten.NewImage(utils.LogicalSize.BreakInt())
+	op := &ebiten.DrawImageOptions{}
+	h.sliderHintCanvas = newRoundRectCanvasUi(utils.NewPoint(h.subRect.Dx()/2+h.subRect.Min.X, h.subRect.Max.Y-20), utils.MM, hintColor, 0).LockSize(utils.NewPoint(46, 22))
+	h.sliderHintCanvas.AddKid(NewStaticTextUiAsKid("···", SmallSize, color.White))
+	h.setSliderRect()
+	h.sliderDraw = func(screen *ebiten.Image) {
+		screenCache.Clear()
+		for i := range h.kids {
+			h.kids[i].Draw(screenCache)
+		}
+		op.GeoM.Reset()
+		op.GeoM.Translate(float64(h.subRect.Min.X), float64(h.subRect.Min.Y))
+		if h.Size().Y > h.sliderYRange {
+			// 尺寸过大展示
+			h.sliderHintCanvas.Draw(screenCache)
+		}
+
+		screen.DrawImage(screenCache.SubImage(h.subRect).(*ebiten.Image), op)
+	}
 }

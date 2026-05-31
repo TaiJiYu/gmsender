@@ -145,6 +145,12 @@ func (c *CanvasUi) SetPos(pos utils.Point, ali utils.AlignmentType) {
 	c.setOp(c.offset)
 }
 
+// 增加渲染偏移
+func (c *CanvasUi) AddPosOffset(offset utils.Point) {
+	c.offset = c.offset.Add(offset)
+	c.setOp(offset)
+}
+
 // 设置坐标偏移
 func (c *CanvasUi) SetPosOffset(offset utils.Point) {
 	c.offset = offset

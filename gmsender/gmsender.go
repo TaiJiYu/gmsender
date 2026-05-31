@@ -114,6 +114,8 @@ func NewGMSender() *gmsenderCli {
 		vBox.AddKid(filescanvas)
 		sendercli.midCanvas.AddKid(vBox)
 
+		sendercli.filesVbox.SetSlider(filescanvas.Size().Y-10*2, backColor)
+
 		// 缩小状态机
 		sendercli.smallState = statemachine.NewStateMachineWithDraw(gametime.BigTimerType)
 
@@ -179,13 +181,22 @@ func NewGMSender() *gmsenderCli {
 			input.InputUpdate()
 			sendercli.moveScreen()
 
+			if input.MouseWheelDownAction.Check() {
+				// 滑动值增加
+				sendercli.filesVbox.Slider(20)
+			} else if input.MouseWheelUpAction.Check() {
+				// 滑动值减少
+				sendercli.filesVbox.Slider(-20)
+			}
 			checkPos := utils.NewPoint(ebiten.CursorPosition())
 
 			sendercli.closeButton.Update(checkPos)
 			sendercli.smallButton.Update(checkPos)
 			sendercli.choseFileButton.Update(checkPos)
 
-			fileListCli.Update(checkPos)
+			if sendercli.filesVbox.CheckMouseInSlider(checkPos) {
+				fileListCli.Update(checkPos)
+			}
 		}, func(screen *ebiten.Image) {
 			screen.Clear()
 			sendercli.canvas.Draw(screen)
@@ -194,8 +205,6 @@ func NewGMSender() *gmsenderCli {
 			sendercli.smallButton.Draw(screen)
 
 			sendercli.midCanvas.Draw(screen)
-
-			fileListCli.Draw(screen)
 		})
 		sendercli.smallState.NewState(toSmallState).BindUD(func() {
 			gametime.BigTimeRun()
@@ -212,8 +221,6 @@ func NewGMSender() *gmsenderCli {
 			sendercli.smallButton.Draw(screen)
 
 			sendercli.midCanvas.Draw(screen)
-
-			fileListCli.Draw(screen)
 		})
 
 		sendercli.smallState.NewState(smallState).SetEnterFunc(func() {
@@ -257,8 +264,6 @@ func NewGMSender() *gmsenderCli {
 			sendercli.smallButton.Draw(screen)
 
 			sendercli.midCanvas.Draw(screen)
-
-			fileListCli.Draw(screen)
 		})
 
 		sendercli.smallState.SToSWithTimeLimit(toSmallState, smallState, smallTime)

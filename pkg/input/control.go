@@ -13,6 +13,13 @@ var (
 
 	// 鼠标左键释放
 	GameMainReleasedAction = NewAction(ReleasedType).AddMouse(ebiten.MouseButtonLeft)
+
+	// 鼠标滑轮向下运动
+
+	// 鼠标滑动
+	MouseWheelDownAction = NewAction(MouseWheelDown)
+	MouseWheelUpAction   = NewAction(MouseWheelUp)
+
 	// // 鼠标左键与手柄的A按住
 	// GameMainPressHoldAction = NewAction(PressHold).AddMouse(ebiten.MouseButtonLeft)
 	// // 键盘esc与手柄的B松开

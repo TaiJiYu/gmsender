@@ -10,8 +10,6 @@ import (
 	"gmsender/utils"
 	"image/color"
 	"path/filepath"
-
-	"github.com/hajimehoshi/ebiten/v2"
 )
 
 const (
@@ -68,11 +66,6 @@ func (l *fileList) Update(checkPos utils.Point) {
 		} else {
 			f.update(checkPos)
 		}
-	}
-}
-func (l *fileList) Draw(screen *ebiten.Image) {
-	for e := l.files.Front(); e != nil; e = e.Next() {
-		e.Value.(*fileCmp).draw(screen)
 	}
 }
 
@@ -165,7 +158,4 @@ func newFileCmp(file netfinder.File) *fileCmp {
 
 func (f *fileCmp) update(checkPos utils.Point) {
 	f.button.Update(checkPos)
-}
-func (f *fileCmp) draw(screen *ebiten.Image) {
-	f.canvas.Draw(screen)
 }
