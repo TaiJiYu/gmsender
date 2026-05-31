@@ -31,7 +31,7 @@ type finder struct {
 	selfIsMaster atomic.Bool // 自己是否是master
 
 	isInitDoneB   atomic.Bool  // 是否初始化完成
-	multicastCoon *net.UDPConn // 组播监听链接
+	broadcastCoon *net.UDPConn // 组播监听链接
 
 	finderErr error
 
@@ -59,7 +59,7 @@ func defaultFinder() *finder {
 			filesMap:                 make(map[File]struct{}),
 		}
 		finderCli.pTopTcpListener()
-		finderCli.multicastListener()
+		finderCli.broadcastListener()
 		finderCli.askMaster()
 	})
 	return finderCli
@@ -155,13 +155,13 @@ func (f *finder) pTopTcpListener() {
 }
 
 // 组播监听
-func (f *finder) multicastListener() {
+func (f *finder) broadcastListener() {
 	// 绑定本地端口接收组播
 	conn, err := net.ListenUDP("udp", broadcastListenAddr)
 	if err != nil {
 		panic(err)
 	}
-	f.multicastCoon = conn
+	f.broadcastCoon = conn
 
 	// 监听线程
 	go func() {
@@ -199,7 +199,7 @@ func (f *finder) askMaster() {
 		{
 		loop:
 			for i := 0; i < 3; i++ {
-				f.multicastCoon.WriteToUDP(askMasterBytes(), broadcastAddr)
+				f.broadcastCoon.WriteToUDP(askMasterBytes(), broadcastAddr)
 				time.Sleep(time.Second)
 				f.lastWaitSec -= time.Second
 				select {
@@ -224,8 +224,8 @@ func (f *finder) askMaster() {
 
 func (f *finder) closeNetFinder() {
 	close(f.ptopTcpOutChan)
-	if f.multicastCoon != nil {
-		f.multicastCoon.Close()
+	if f.broadcastCoon != nil {
+		f.broadcastCoon.Close()
 	}
 }
 
@@ -323,7 +323,7 @@ func (f *finder) delPublicFile(file File) {
 		go f.masterAnswerFiles()
 	} else {
 		// 自己是节点
-		go f.multicastCoon.WriteToUDP(delPublicSelfFileBytes(file), f.masterbroadcastAddr)
+		go f.broadcastCoon.WriteToUDP(delPublicSelfFileBytes(file), f.masterbroadcastAddr)
 	}
 }
 
@@ -343,11 +343,41 @@ func (f *finder) publicFile(filename string) {
 		}
 	} else {
 		// 自己是节点
-		go func() {
-			fmt.Println("节点同步文件", filename)
-			fmt.Println(f.multicastCoon.WriteToUDP(publicSelfFileBytes(fileS), f.masterbroadcastAddr))
+		go f.broadcastCoon.WriteToUDP(publicSelfFileBytes(fileS), f.masterbroadcastAddr)
+	}
+}
 
-		}()
+// 放弃master身份转换为node
+func (f *finder) masterToNode(master baseInfo) {
+	// 先更新前端
+	f.selfIsMaster.Store(false)
+	f.saveMasterInfo(master)
+	typeChangeCallback(false)
+	go func() {
+		time.Sleep(time.Second) // 等待一秒缓冲
+		f.nodeLoop()
+	}()
+}
+
+// 节点循环职责
+func (f *finder) nodeLoop() {
+	// 询问当前的公开文件,3次重试
+	for i := 0; i < 3; i++ {
+		if _, err := f.broadcastCoon.WriteTo(askFilesBytes(), f.masterbroadcastAddr); err != nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		break
+	}
+
+	buf := make([]byte, 32*1024) // 32kB缓存
+
+	for {
+		n, err := f.broadcastCoon.Read(buf)
+		if err != nil {
+			continue
+		}
+		f.nodeDecode(buf[:n])
 	}
 }
 
@@ -362,27 +392,7 @@ func (f *finder) beNode() {
 	typeChangeCallback(false)
 	fmt.Println("node", Id())
 	// 监听线程
-	go func() {
-		// 询问当前的公开文件,3次重试
-		for i := 0; i < 3; i++ {
-			if _, err := f.multicastCoon.WriteTo(askFilesBytes(), f.masterbroadcastAddr); err != nil {
-				time.Sleep(time.Second)
-				continue
-			}
-			break
-		}
-
-		buf := make([]byte, 32*1024) // 32kB缓存
-
-		for {
-			n, err := f.multicastCoon.Read(buf)
-			if err != nil {
-				continue
-			}
-			f.nodeDecode(buf[:n])
-		}
-
-	}()
+	go f.nodeLoop()
 }
 
 // 成为master
@@ -404,11 +414,14 @@ func (f *finder) beMaster() {
 		buf := make([]byte, 32*1024) // 32kB缓存
 
 		for {
-			n, err := f.multicastCoon.Read(buf)
+			n, err := f.broadcastCoon.Read(buf)
 			if err != nil {
 				continue
 			}
-			f.masterDecode(buf[:n])
+			if f.masterDecode(buf[:n]) {
+				// 放弃了master身份
+				return
+			}
 		}
 	}()
 }

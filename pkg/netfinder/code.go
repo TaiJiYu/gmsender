@@ -63,12 +63,10 @@ func (f *finder) decode(data []byte) bool {
 	switch order {
 	case askMasterNetOrder:
 		//  询问指令
-		if info.Ip > getLocalIp() || info.Id > Id() {
-			// 如果对方ip高于自己或者id大于自己，则放弃选主，直接等待
+		if !CompetitiveMaster(info) {
+			// 竞争失败主动退让
 			waitSec := (time.Duration(data[0]&afterMask) + 1) * time.Second
 			f.askWait(waitSec)
-		} else {
-			// 否则不做处理继续询问
 		}
 		return false
 	case masterAnswerNetOrder:
@@ -76,6 +74,20 @@ func (f *finder) decode(data []byte) bool {
 		receivedMasterAnwer(info)
 		return true
 	}
+	return false
+}
+
+// 竞争master，如果返回true说明竞争成功，有资格成为master，不退让
+func CompetitiveMaster(otherInfo baseInfo) bool {
+	if getLocalIp() > otherInfo.Ip {
+		// 自己ip大于对方，则有资格
+		return true
+	}
+	if getLocalIp() == otherInfo.Ip {
+		// 与对方ip相等，再考虑id
+		return Id() > otherInfo.Id
+	}
+
 	return false
 }
 
@@ -127,7 +139,7 @@ func (f *finder) masterAnswerFiles() {
 	} else {
 		filesOrdBytes := append([]byte{byte(masterAnswerFilesNetOrder)}, dataFiles...)
 		for i := 0; i < 3; i++ {
-			if _, err := f.multicastCoon.WriteToUDP(filesOrdBytes, broadcastAddr); err != nil {
+			if _, err := f.broadcastCoon.WriteToUDP(filesOrdBytes, broadcastAddr); err != nil {
 				time.Sleep(time.Second)
 				continue
 			}
@@ -137,29 +149,43 @@ func (f *finder) masterAnswerFiles() {
 }
 
 // master解码组播消息
-// 返回来源的基础信息和是否需要回复
-func (f *finder) masterDecode(data []byte) {
+// 返回是否放弃了master身份
+func (f *finder) masterDecode(data []byte) bool {
 	if len(data) < 1 {
-		return
+		return false
 	}
 	order := decodeOrder(data[0])
-	fmt.Println("收到指令", order)
 	switch order {
+	case masterAnswerNetOrder:
+		// 收到了master回复
+		info := baseInfo{}
+		err := json.Unmarshal(data[1:], &info)
+		if err != nil {
+			return false
+		}
+		if info.Id == Id() {
+			// 来自自己的消息，直接忽略
+			return false
+		}
+		if !CompetitiveMaster(info) {
+			// 竞争失败，放弃master身份
+			f.masterToNode(info)
+			return true
+		}
+
 	case askMasterNetOrder:
 		//  询问指令
-		f.multicastCoon.WriteToUDP(masterAnswerBytes(), broadcastAddr)
+		f.broadcastCoon.WriteToUDP(masterAnswerBytes(), broadcastAddr)
 	case askFilesNetOrder:
 		// 收到询问文件列表消息
 		f.masterAnswerFiles()
 	case publicFileNetOrder:
 		// 收到了节点的公开请求
-		fmt.Println("收到公布文件开始")
 		file := File{}
 		if err := json.Unmarshal(data[1:], &file); err != nil {
 			// 文件有问题
-			return
+			return false
 		}
-		fmt.Println("收到公布文件解码完成")
 		if newfiles, change := f.appendFile(file); change {
 			// 保存后通知其他节点
 			filesCallback(newfiles)
@@ -171,13 +197,14 @@ func (f *finder) masterDecode(data []byte) {
 		file := File{}
 		if err := json.Unmarshal(data[1:], &file); err != nil {
 			// 文件有问题
-			return
+			return false
 		}
 		f.delFile(file)
 		filesCallback(f.readFiles())
 		f.masterAnswerFiles()
-
 	}
+
+	return false
 }
 
 // 解码出指令类型
