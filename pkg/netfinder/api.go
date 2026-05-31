@@ -1,12 +1,14 @@
 package netfinder
 
 var (
-	filesCallback func(files []File)
+	filesCallback      func(files []File)
+	typeChangeCallback func(isMaster bool)
 )
 
 // filesCallback文件同步回调，公开文件有更新时调用
-func Init(filesCallbackFunc func(files []File)) {
+func Init(filesCallbackFunc func(files []File), typeChangeCallbackFunc func(isMaster bool)) {
 	filesCallback = filesCallbackFunc
+	typeChangeCallback = typeChangeCallbackFunc
 	defaultFinder()
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync/atomic"
 	"testing"
 )
 
@@ -159,6 +160,13 @@ func TestUDP(t *testing.T) {
 	// realAddr.IP.
 	fmt.Printf("绑定到的端口: %v\n", lister.Addr())
 
+}
+
+func TestBool(t *testing.T) {
+	a := atomic.Bool{}
+
+	fmt.Println(a.CompareAndSwap(false, true), a.Load()) //true,true
+	fmt.Println(a.CompareAndSwap(false, true), a.Load()) //false,true
 }
 
 func TestBuffer(t *testing.T) {

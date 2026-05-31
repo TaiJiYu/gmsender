@@ -32,7 +32,7 @@ type gmsenderCli struct {
 
 	filesVbox *ui.VerticalBox // 文件列表
 
-	// id string // 本机id
+	idText *ui.TextUi // 本机id
 
 	smallState statemachine.StateMachineWithDrawI // 缩小状态机
 
@@ -84,7 +84,7 @@ func NewGMSender() *gmsenderCli {
 		sendercli.topCanvas = ui.NewEmptyCanvasUi(utils.ZeroPoint, utils.LL, 20)
 		// 顶部栏位分左右部分，左侧是客户端id，右侧是缩小和关闭
 		hBox := ui.NewHorizontalBox(20)
-		idText := hBox.AddKid(ui.NewStaticTextUiAsKid("ID:???", ui.SmallSize, idTextColor)).(*ui.TextUi)
+		sendercli.idText = hBox.AddKid(ui.NewStaticTextUiAsKid("ID:???", ui.SmallSize, idTextColor)).(*ui.TextUi)
 		sendercli.topCanvas.AddKid(hBox)
 
 		sendercli.closeButton = ui.NewButton(asset.CloseImg(), utils.NewPoint(utils.LogicalSizeX, 0).Sub(utils.NewPoint(20, -20)).Sub(utils.NewPoint(asset.CloseImg().Bounds().Dx()/2, -asset.CloseImg().Bounds().Dy()/2)), utils.MM, gametime.BigTimerType)
@@ -130,11 +130,11 @@ func NewGMSender() *gmsenderCli {
 		isFaile := false
 		// 加载状态
 		sendercli.smallState.NewState(loadingState).SetEnterFunc(func() {
-			go netfinder.Init(sendercli.refreshFiles)
+			go netfinder.Init(sendercli.refreshFiles, sendercli.typeChange)
 		}).SetExitFunc(func() {
 			clear(loadingTexts)
 			loadingTexts = nil
-			idText.SetText("ID:" + netfinder.Id())
+			sendercli.idText.SetText("ID:" + netfinder.Id())
 		}).BindUD(func() {
 			gametime.BigTimeRun()
 			sendercli.moveScreen()
@@ -273,6 +273,15 @@ func NewGMSender() *gmsenderCli {
 // 刷新文件展示
 func (s *gmsenderCli) refreshFiles(files []netfinder.File) {
 	fileListCli.refreshFiles(files)
+}
+
+// 客户端身份转换
+func (s *gmsenderCli) typeChange(isMaster bool) {
+	if isMaster {
+		sendercli.idText.SetColor(idMasterColor)
+	} else {
+		sendercli.idText.SetColor(idNodeColor)
+	}
 }
 
 // 添加一个文件到列表展示

@@ -119,39 +119,6 @@ func newStaticTextUi(text string, size FontSize, pos utils.Point, ali utils.Alig
 	return t
 }
 
-// func newTextUiByFormat(formats string, textKeys []asset.LocationKey, size FontSize, pos utils.Point, ali utils.AlignmentType, color color.Color) *TextUi {
-// 	t := &TextUi{
-// 		isFormat:   true,
-// 		formats:    formats,
-// 		formatKeys: textKeys,
-// 		size:       size,
-// 		pos:        pos,
-// 		ali:        ali,
-// 		op:         &ebiten.DrawImageOptions{},
-// 		color:      color,
-// 	}
-// 	sl := []any{}
-// 	for _, k := range textKeys {
-// 		sl = append(sl, k.Text())
-// 	}
-// 	t.setText(fmt.Sprintf(formats, sl...))
-// 	return t
-// }
-
-// // 设置新的formats,如果formats和已经设置的相同，则不会做任何处理，禁止每帧调用！！！
-//
-//	func (t *TextUi) SetByFormat(formats string) {
-//		if t.formats == formats {
-//			return
-//		}
-//		t.formats = formats
-//		sl := []any{}
-//		for _, k := range t.formatKeys {
-//			sl = append(sl, k.Text())
-//		}
-//		t.setText(fmt.Sprintf(formats, sl...))
-//	}
-//
 // 在两侧增加空格保证补齐到指定尺寸
 func (t *TextUi) AddSpaceToSizeX(x float64) *TextUi {
 	nowx := t.Size().X
@@ -189,6 +156,18 @@ func (t *TextUi) setText(s string) {
 		t.img = ebiten.NewImage(int(w), int(h))
 	}
 
+	textUiFaces.options.ColorScale.Reset()
+	textUiFaces.options.ColorScale.ScaleWithColor(t.color)
+	text.Draw(t.img, t.s, t.size.face(), textUiFaces.options)
+}
+
+// 修改颜色
+func (t *TextUi) SetColor(c color.Color) {
+	if t.color == c {
+		return
+	}
+	t.color = c
+	t.img.Clear()
 	textUiFaces.options.ColorScale.Reset()
 	textUiFaces.options.ColorScale.ScaleWithColor(t.color)
 	text.Draw(t.img, t.s, t.size.face(), textUiFaces.options)

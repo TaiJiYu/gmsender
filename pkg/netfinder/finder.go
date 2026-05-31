@@ -50,7 +50,7 @@ func defaultFinder() *finder {
 			askMasterChan:            make(chan time.Duration, 1),
 			multicastListenerOutChan: make(chan struct{}, 1),
 			ptopTcpOutChan:           make(chan struct{}, 1),
-			lastWaitSec:              3 * time.Second,
+			lastWaitSec:              6 * time.Second,
 			files:                    make([]File, 0),
 			filesMap:                 make(map[File]struct{}),
 		}
@@ -163,7 +163,7 @@ func (f *finder) multicastListener() {
 	go func() {
 		buf := make([]byte, 32*1024) // 32kB缓存
 		{
-		loop:
+		listenerLoop:
 			for {
 				n, err := conn.Read(buf)
 				if err != nil {
@@ -175,11 +175,12 @@ func (f *finder) multicastListener() {
 					f.beNode()
 					break
 				}
+
 				select {
 				case <-f.multicastListenerOutChan:
 					// 没收到master回复但是收到了退出信号，自己成为master
 					f.closeAsk()
-					break loop
+					break listenerLoop
 				default:
 				}
 			} // loop结束
@@ -195,9 +196,8 @@ func (f *finder) askMaster() {
 		loop:
 			for i := 0; i < 3; i++ {
 				f.multicastCoon.WriteToUDP(askMasterBytes(), broadcastAddr)
-
-				time.Sleep(time.Second)
-				f.lastWaitSec -= time.Second
+				time.Sleep(2 * time.Second)
+				f.lastWaitSec -= 2 * time.Second
 				select {
 				case waitTime, ok := <-f.askMasterChan:
 					if ok {
@@ -349,8 +349,13 @@ func (f *finder) publicFile(filename string) {
 
 // 作为一个节点监听信息
 func (f *finder) beNode() {
+	if f.isInitDoneB.Load() {
+		// 已经交换过了
+		return
+	}
 	f.selfIsMaster.Store(false)
 	f.isInitDoneB.Store(true)
+	typeChangeCallback(false)
 	fmt.Println("node", Id())
 	// 监听线程
 	go func() {
@@ -378,9 +383,15 @@ func (f *finder) beNode() {
 
 // 成为master
 func (f *finder) beMaster() {
+	if f.isInitDoneB.Load() {
+		// 已经交换过了
+		return
+	}
+
 	f.saveMasterInfo(readSelfBaseInfo())
 	f.selfIsMaster.Store(true)
 	f.isInitDoneB.Store(true)
+	typeChangeCallback(true)
 	fmt.Println("master", Id())
 
 	// 成为master后需要继续监听组播消息，给其他人回复master信息
