@@ -7,7 +7,29 @@ import (
 	"net"
 	"sync/atomic"
 	"testing"
+	"time"
 )
+
+func TestChanClose(t *testing.T) {
+	a := make(chan struct{}, 1)
+
+	go func() {
+		time.Sleep(time.Second * 3)
+		close(a)
+	}()
+loop:
+	for {
+		select {
+		case <-a:
+			fmt.Println("受到关闭信号")
+			break loop
+		default:
+			fmt.Println("没有信号")
+			time.Sleep(time.Second)
+		}
+	}
+
+}
 
 func TestFileName(t *testing.T) {
 	fileS := File{
@@ -101,9 +123,9 @@ func TestCode(t *testing.T) {
 	}
 	fmt.Println("")
 
-	decode(bs)
+	// decode(bs)
 
-	decode(bss)
+	// decode(bss)
 }
 
 func TestChan(t *testing.T) {

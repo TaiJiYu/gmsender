@@ -16,7 +16,9 @@ import (
 // 服务发现
 type finder struct {
 	chanCloseOnce            sync.Once
+	isExWating               atomic.Bool // 是否在延长等待期间
 	askMasterChan            chan time.Duration
+	askMasterOutChan         chan struct{} // 询问线程退出信号
 	multicastListenerOutChan chan struct{}
 	ptopTcpOutChan           chan struct{} // tcp链接管道
 	isClose                  atomic.Bool
@@ -47,7 +49,9 @@ var (
 func defaultFinder() *finder {
 	finderOnce.Do(func() {
 		finderCli = &finder{
+			isExWating:               atomic.Bool{},
 			askMasterChan:            make(chan time.Duration, 1),
+			askMasterOutChan:         make(chan struct{}, 1),
 			multicastListenerOutChan: make(chan struct{}, 1),
 			ptopTcpOutChan:           make(chan struct{}, 1),
 			lastWaitSec:              6 * time.Second,
@@ -169,7 +173,7 @@ func (f *finder) multicastListener() {
 				if err != nil {
 					continue
 				}
-				if decode(buf[:n]) {
+				if f.decode(buf[:n]) {
 					// 收到master回复并退出监听，自己不是master，但保留通信组播监听，用于接受之后的组播消息
 					f.closeAsk()
 					f.beNode()
@@ -199,13 +203,13 @@ func (f *finder) askMaster() {
 				time.Sleep(2 * time.Second)
 				f.lastWaitSec -= 2 * time.Second
 				select {
-				case waitTime, ok := <-f.askMasterChan:
-					if ok {
-						time.Sleep(waitTime)
-					} else {
-						// 通道已经关闭，被监听线程关闭
-						break loop
-					}
+				case <-f.askMasterOutChan:
+					// 收到退出信号
+					// 通道已经关闭，被监听线程关闭
+					break loop
+				case waitTime := <-f.askMasterChan:
+					time.Sleep(waitTime)
+					f.isExWating.Store(false)
 				default:
 				}
 				if i == 2 {
@@ -302,7 +306,7 @@ func (f *finder) downLoadFile(dstinfo baseInfo, dstFileName, saveFileName string
 func (f *finder) closeAsk() {
 	f.chanCloseOnce.Do(func() {
 		f.isClose.Store(true)
-		close(f.askMasterChan)
+		close(f.askMasterOutChan)
 		close(f.multicastListenerOutChan)
 	})
 }
@@ -416,10 +420,13 @@ func readWaitSec() int {
 }
 
 // 要求等待线程延长等待时间
-func askWait(t time.Duration) {
-	if defaultFinder().isClose.Load() {
-		defaultFinder().askMasterChan <- t
+func (f *finder) askWait(t time.Duration) {
+	if f.isExWating.Load() {
+		// 延长等待期间
+		return
 	}
+	f.isExWating.Store(true)
+	defaultFinder().askMasterChan <- t
 }
 
 // 保存master信息

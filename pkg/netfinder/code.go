@@ -46,7 +46,7 @@ func masterAnswerBytes() []byte {
 	return append([]byte{header}, readSelfBaseInfoBytes()...)
 }
 
-func decode(data []byte) bool {
+func (f *finder) decode(data []byte) bool {
 	if len(data) < 1 {
 		return false
 	}
@@ -66,7 +66,7 @@ func decode(data []byte) bool {
 		if info.Ip > getLocalIp() || info.Id > Id() {
 			// 如果对方ip高于自己或者id大于自己，则放弃选主，直接等待
 			waitSec := (time.Duration(data[0]&afterMask) + 1) * time.Second
-			askWait(waitSec)
+			f.askWait(waitSec)
 		} else {
 			// 否则不做处理继续询问
 		}
