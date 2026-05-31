@@ -54,7 +54,7 @@ func defaultFinder() *finder {
 			askMasterOutChan:         make(chan struct{}, 1),
 			multicastListenerOutChan: make(chan struct{}, 1),
 			ptopTcpOutChan:           make(chan struct{}, 1),
-			lastWaitSec:              6 * time.Second,
+			lastWaitSec:              3 * time.Second,
 			files:                    make([]File, 0),
 			filesMap:                 make(map[File]struct{}),
 		}
@@ -200,8 +200,8 @@ func (f *finder) askMaster() {
 		loop:
 			for i := 0; i < 3; i++ {
 				f.multicastCoon.WriteToUDP(askMasterBytes(), broadcastAddr)
-				time.Sleep(2 * time.Second)
-				f.lastWaitSec -= 2 * time.Second
+				time.Sleep(time.Second)
+				f.lastWaitSec -= time.Second
 				select {
 				case <-f.askMasterOutChan:
 					// 收到退出信号
