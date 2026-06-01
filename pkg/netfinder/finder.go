@@ -1,7 +1,6 @@
 package netfinder
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -231,18 +230,17 @@ func (f *finder) closeNetFinder() {
 
 // 收到其他用户的下载请求
 func (f *finder) handlerDownLoad(conn net.Conn) {
-	buf := bytes.NewBuffer(make([]byte, 32*1024))
 
+	buf := make([]byte, 32*1024)
 	fmt.Println("收到了下载请求handler")
-	buf.Reset()
-	if _, err := io.Copy(buf, conn); err != nil {
-		conn.Close()
-		fmt.Println("copy file", err)
-		return
+
+	n, err := conn.Read(buf)
+	if err != nil {
+		fmt.Println(err)
 	}
 
 	// 收到了文件请求
-	file := decodeDownloadFileInfo(buf.Bytes())
+	file := decodeDownloadFileInfo(buf[:n])
 	fmt.Println("收到了下载请求：", file)
 
 	fileS, err := os.Open(file)
@@ -291,18 +289,23 @@ func (f *finder) downloadFile(saveFileName string, info File) {
 	go func() {
 		for i := 0; i < retryTimesMax; i++ {
 			// 点对点链接
+			fmt.Println("尝试链接")
 			conn, err := net.Dial("tcp", info.addr())
+			fmt.Println("链接完成：", err)
 			if err != nil {
 				// 链接出错，等待1-3秒后重试
 				fmt.Println(err)
 				time.Sleep(time.Duration(rand.IntN(3)+1) * time.Second)
 				continue
 			}
+			fmt.Println("请求下载：", err)
 
 			// 请求下载文件
 			for j := 0; j < retryTimesMax; j++ {
 				message := downLoadFileBytes(info.FileName)
+				fmt.Println("请求下载写文件入口")
 				_, err = conn.Write(message)
+				fmt.Println("写请求完成：", err)
 				if err != nil {
 					// 接受失败，等会重试
 					fmt.Println(err)

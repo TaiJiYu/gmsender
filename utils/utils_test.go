@@ -1,7 +1,10 @@
 package utils
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -9,6 +12,17 @@ import (
 func TestFile(t *testing.T) {
 	f := OpenWinSaveFileName()
 	fmt.Println("内容：", f, filepath.Dir(f))
+}
+
+func TestRead(t *testing.T) {
+	fileS, err := os.Open("test.txt")
+	if err != nil {
+		// 文件错误
+		return
+	}
+	coon := bytes.NewBuffer(make([]byte, 1024))
+	fmt.Println(io.Copy(coon, fileS))
+	fmt.Println("done")
 }
 
 func TestList(t *testing.T) {
