@@ -20,7 +20,7 @@ const (
 
 const (
 	afterMask    byte = 0x1f
-	netOrderMask byte = 0xff - afterMask
+	netOrderMask byte = ^afterMask
 )
 
 // 建联基础信息

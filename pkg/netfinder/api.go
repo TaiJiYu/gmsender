@@ -37,7 +37,10 @@ func DelPublicFile(file File) {
 }
 
 // 下载文件
-func DownLoadFile() {}
+// saveFileName是存储的文件名，info是请求的文件
+func DownLoadFile(saveFileName string, info File) {
+	defaultFinder().downloadFile(saveFileName, info)
+}
 
 // 关闭网络
 func Close() {

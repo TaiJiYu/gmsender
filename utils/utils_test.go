@@ -7,7 +7,7 @@ import (
 )
 
 func TestFile(t *testing.T) {
-	f := OpenWinChooseFile()
+	f := OpenWinSaveFileName()
 	fmt.Println("内容：", f, filepath.Dir(f))
 }
 

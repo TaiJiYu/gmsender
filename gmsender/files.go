@@ -2,7 +2,6 @@ package gmsender
 
 import (
 	"container/list"
-	"fmt"
 	gametime "gmsender/pkg/game_time"
 	"gmsender/pkg/input"
 	"gmsender/pkg/netfinder"
@@ -109,7 +108,7 @@ func (f *fileCmp) buttonFunc(bu *ui.ButtonUi) {
 		f.isDel = true
 	} else {
 		// 别人的
-		fmt.Println("下载")
+		netfinder.DownLoadFile(utils.OpenWinSaveFileName(), f.file)
 	}
 }
 

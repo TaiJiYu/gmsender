@@ -114,3 +114,25 @@ func OpenWinChooseFile() string {
 		return ""
 	}
 }
+
+// 打开windows保存文件名
+func OpenWinSaveFileName() string {
+	var ofn win.OPENFILENAME
+	fileName := make([]uint16, win.MAX_PATH)
+	ofn.LStructSize = uint32(unsafe.Sizeof(ofn))
+	ofn.LpstrFile = &fileName[0]
+	ofn.NMaxFile = uint32(len(fileName))
+	var err error
+	ofn.LpstrFilter, err = syscall.UTF16PtrFromString("") //\000*.*\000Text Files\000*.txt\000
+	if err != nil {
+		panic(err)
+	}
+	ofn.NFilterIndex = 1
+	ofn.Flags = win.OFN_FILEMUSTEXIST | win.OFN_PATHMUSTEXIST
+
+	if win.GetSaveFileName(&ofn) {
+		return syscall.UTF16ToString(fileName)
+	} else {
+		return ""
+	}
+}

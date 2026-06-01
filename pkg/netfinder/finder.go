@@ -241,6 +241,7 @@ func (f *finder) handlerDownLoad(conn net.Conn) {
 
 	// 收到了文件请求
 	file := decodeDownloadFileInfo(buf.Bytes())
+	fmt.Println("收到了下载请求：", file)
 
 	fileS, err := os.Open(file)
 	if err != nil {
@@ -248,58 +249,9 @@ func (f *finder) handlerDownLoad(conn net.Conn) {
 		conn.Close()
 		return
 	}
-	io.Copy(conn, fileS)
+	fmt.Println(io.Copy(conn, fileS))
 	conn.Close()
 	fileS.Close()
-}
-
-const (
-	retryTimesMax = 5 // 最多重试5次
-)
-
-// 下载文件
-// dstFileName要下载的目标文件名称
-// saveFileName 保存文件名
-func (f *finder) downLoadFile(dstinfo baseInfo, dstFileName, saveFileName string, errChan chan error) {
-	go func() {
-		for i := 0; i < retryTimesMax; i++ {
-			// 点对点链接
-			conn, err := net.Dial("tcp", dstinfo.addr())
-			if err != nil {
-				// 链接出错，等待1-3秒后重试
-				time.Sleep(time.Duration(rand.IntN(3)+1) * time.Second)
-				continue
-			}
-
-			// 请求下载文件
-			for j := 0; j < retryTimesMax; j++ {
-				message := downLoadFileBytes(dstFileName)
-				_, err = conn.Write(message)
-				if err != nil {
-					// 接受失败，等会重试
-					time.Sleep(time.Duration(rand.IntN(3)+1) * time.Second)
-					continue
-				}
-
-				// 接收文件
-				file, err := os.Create(saveFileName)
-				if err != nil {
-					errChan <- err
-					break
-				}
-				if _, err := io.Copy(file, conn); err != nil {
-					file.Close()
-					os.Remove(saveFileName)
-				} else {
-					file.Close()
-				}
-				break
-			}
-
-			conn.Close()
-			break
-		}
-	}()
 }
 
 // 停止询问环节
@@ -310,6 +262,7 @@ func (f *finder) closeAsk() {
 		close(f.multicastListenerOutChan)
 	})
 }
+
 func (f *finder) saveMasterInfo(info baseInfo) {
 	f.masterInfo = info
 	f.masterbroadcastAddr, _ = net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%s", info.Ip, broadcastPort)) // 广播公用地址
@@ -325,6 +278,56 @@ func (f *finder) delPublicFile(file File) {
 		// 自己是节点
 		go f.broadcastCoon.WriteToUDP(delPublicSelfFileBytes(file), f.masterbroadcastAddr)
 	}
+}
+
+const (
+	retryTimesMax = 5 // 最多重试5次
+)
+
+// 请求下载别人的文件
+func (f *finder) downloadFile(saveFileName string, info File) {
+	go func() {
+		for i := 0; i < retryTimesMax; i++ {
+			// 点对点链接
+			conn, err := net.Dial("tcp", info.addr())
+			if err != nil {
+				// 链接出错，等待1-3秒后重试
+				fmt.Println(err)
+				time.Sleep(time.Duration(rand.IntN(3)+1) * time.Second)
+				continue
+			}
+
+			// 请求下载文件
+			for j := 0; j < retryTimesMax; j++ {
+				message := downLoadFileBytes(info.FileName)
+				_, err = conn.Write(message)
+				if err != nil {
+					// 接受失败，等会重试
+					fmt.Println(err)
+					time.Sleep(time.Duration(rand.IntN(3)+1) * time.Second)
+					continue
+				}
+
+				// 接收文件
+				file, err := os.Create(saveFileName)
+				if err != nil {
+					fmt.Println(err)
+					break
+				}
+				if _, err := io.Copy(file, conn); err != nil {
+					fmt.Println(err)
+					file.Close()
+					// os.Remove(saveFileName)
+				} else {
+					file.Close()
+				}
+				break
+			}
+
+			conn.Close()
+			break
+		}
+	}()
 }
 
 // 公开文件,自己调用了公开本机文件
