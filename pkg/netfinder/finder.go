@@ -77,13 +77,15 @@ func (f *finder) reIn() {
 		if f.selfIsMaster.Load() {
 			// master只需要问一下谁是master
 			f.broadcastCoon.WriteToUDP(askMasterBytes(), broadcastAddr)
-			time.Sleep(time.Second)
 			initDoneCallBack()
 		} else {
 			// 如果是节点需要先关闭广播请求重新问一下
 			f.broadcastCoon.Close()
 			f.broadcastCoon = nil
 			f.isClose.Store(false)
+			f.isInitDoneB.Store(false)
+			f.askMasterOutChan = make(chan struct{}, 1)
+			f.multicastListenerOutChan = make(chan struct{}, 1)
 			finderCli.broadcastListener()
 			finderCli.askMaster()
 		}
@@ -93,8 +95,8 @@ func (f *finder) reIn() {
 // 停止询问环节
 func (f *finder) closeAsk() {
 	if f.isClose.CompareAndSwap(false, true) {
-		f.askMasterOutChan <- struct{}{}         // 关闭询问
-		f.multicastListenerOutChan <- struct{}{} // 关闭询问监听
+		close(f.askMasterOutChan)         // 关闭询问
+		close(f.multicastListenerOutChan) // 关闭询问监听
 	}
 }
 

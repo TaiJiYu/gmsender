@@ -2,6 +2,7 @@ package netfinder
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -28,6 +29,15 @@ loop:
 			time.Sleep(time.Second)
 		}
 	}
+
+}
+
+func TestDeCode(t *testing.T) {
+	data := []byte{34, 123, 34, 105, 112, 34, 58, 34, 49, 57, 50, 46, 49, 54, 56, 46, 51, 46, 49, 55, 34, 44, 34, 112, 111, 114, 116, 34, 58, 34, 53, 49, 53, 51, 50, 34, 44, 34, 105, 100, 34, 58, 34, 117, 110, 86, 103, 51, 84, 113, 50, 34, 125}
+	// order := decodeOrder(data[0])
+	info := baseInfo{}
+	json.Unmarshal(data[1:], &info)
+	fmt.Println(info)
 
 }
 

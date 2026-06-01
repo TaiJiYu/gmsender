@@ -142,6 +142,7 @@ func NewGMSender() *gmsenderCli {
 		sendercli.smallState.NewState(loadingState).SetEnterFunc(func() {
 			isFaile = false
 			netfinder.Init(sendercli.refreshFiles, sendercli.typeChange, func() {
+				time.Sleep(time.Second)
 				sendercli.smallState.Go(bigState)
 			})
 		}).SetExitFunc(func() {
