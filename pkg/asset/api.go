@@ -7,6 +7,7 @@ import (
 	_ "image/png"
 	"io"
 
+	"github.com/fyne-io/image/ico"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/audio"
 	"github.com/hajimehoshi/ebiten/v2/audio/vorbis"
@@ -33,6 +34,10 @@ var (
 	//go:embed done.ogg
 	doneMusicBytes []byte
 	doneMusic      *audio.Player
+
+	//go:embed favicon.ico
+	icoBytes []byte
+	icoImgs  []image.Image
 )
 
 func init() {
@@ -59,7 +64,17 @@ func init() {
 	} else {
 		reInImg = ebiten.NewImageFromImage(img)
 	}
+	// 解码ICO文件
+	if imgs, err := ico.DecodeAll(bytes.NewReader(icoBytes)); err != nil {
+		panic(err)
+	} else {
+		icoImgs = imgs
+	}
 	doneMusic = ogg(doneMusicBytes)
+}
+
+func Ico() []image.Image {
+	return icoImgs
 }
 
 func ogg(oggBytes []byte) *audio.Player {
