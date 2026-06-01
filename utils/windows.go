@@ -122,12 +122,10 @@ func OpenWinSaveFileName() string {
 	ofn.LStructSize = uint32(unsafe.Sizeof(ofn))
 	ofn.LpstrFile = &fileName[0]
 	ofn.NMaxFile = uint32(len(fileName))
-	var err error
-	ofn.LpstrFilter, err = syscall.UTF16PtrFromString("") //\000*.*\000Text Files\000*.txt\000
-	if err != nil {
-		panic(err)
-	}
-	ofn.NFilterIndex = 1
+	// r := utf16.Encode([]rune("所有文件(*.*)"))
+	// r = append(r, 0)
+	ofn.LpstrFilter = nil
+	// ofn.NFilterIndex = 1
 	ofn.Flags = win.OFN_FILEMUSTEXIST | win.OFN_PATHMUSTEXIST
 
 	if win.GetSaveFileName(&ofn) {
