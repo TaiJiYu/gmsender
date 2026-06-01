@@ -233,9 +233,11 @@ func (f *finder) closeNetFinder() {
 func (f *finder) handlerDownLoad(conn net.Conn) {
 	buf := bytes.NewBuffer(make([]byte, 32*1024))
 
+	fmt.Println("收到了下载请求handler")
 	buf.Reset()
 	if _, err := io.Copy(buf, conn); err != nil {
 		conn.Close()
+		fmt.Println("copy file", err)
 		return
 	}
 
