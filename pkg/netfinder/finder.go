@@ -3,6 +3,7 @@ package netfinder
 import (
 	"encoding/json"
 	"fmt"
+	"gmsender/pkg/asset"
 	"io"
 	"math/rand/v2"
 	"net"
@@ -312,7 +313,9 @@ func (f *finder) downloadFile(saveToFloderName string, info File) {
 				if err != nil {
 					break
 				}
-				io.Copy(file, conn)
+				if _, err := io.Copy(file, conn); err == nil {
+					asset.PlayDoneMusic()
+				}
 				file.Close()
 				break
 			}

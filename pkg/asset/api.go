@@ -5,8 +5,11 @@ import (
 	_ "embed"
 	"image"
 	_ "image/png"
+	"io"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/audio"
+	"github.com/hajimehoshi/ebiten/v2/audio/vorbis"
 )
 
 var (
@@ -22,6 +25,10 @@ var (
 	//go:embed smallball.png
 	smallBallBytes []byte
 	smallBallImg   *ebiten.Image
+
+	//go:embed done.ogg
+	doneMusicBytes []byte
+	doneMusic      *audio.Player
 )
 
 func init() {
@@ -42,6 +49,28 @@ func init() {
 	} else {
 		smallBallImg = ebiten.NewImageFromImage(img)
 	}
+	doneMusic = ogg(doneMusicBytes)
+}
+
+func ogg(oggBytes []byte) *audio.Player {
+	s, err := vorbis.DecodeF32(bytes.NewReader(oggBytes))
+	if err != nil {
+		panic(err)
+	}
+	if data, err := io.ReadAll(s); err != nil {
+		panic(err)
+	} else {
+		if audio.CurrentContext() == nil {
+			audio.NewContext(44100)
+		}
+		return audio.CurrentContext().NewPlayerF32FromBytes(data)
+	}
+}
+
+// 播放完成音效
+func PlayDoneMusic() {
+	doneMusic.Rewind()
+	doneMusic.Play()
 }
 
 func FontData() []byte {
