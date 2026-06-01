@@ -7,10 +7,7 @@ import (
 	"github.com/lxn/win"
 )
 
-var defaultFolder string
-
-// 定义一个回调函数，是 SHBrowseForFolder 需要的
-// 在这个最简单的实现中，它什么都不做，但必须存在
+// 回调
 func browseCallback(hwnd win.HWND, uMsg uint, lParam, lpData uintptr) uintptr {
 	return 0
 }
@@ -18,11 +15,10 @@ func browseCallback(hwnd win.HWND, uMsg uint, lParam, lpData uintptr) uintptr {
 // 打开windows文件夹选择器
 func OpenWinFolder() string {
 	var bi win.BROWSEINFO
-	// var pathBuffer [win.MAX_PATH]uint16
 	pathBuffer := make([]uint16, win.MAX_PATH)
-	bi.PszDisplayName = &pathBuffer[0]                        // 接收显示名称的缓冲区
-	bi.LpszTitle, _ = syscall.UTF16PtrFromString("选择一个下载位置：") // 对话框标题
-	bi.Lpfn = syscall.NewCallback(browseCallback)             // 回调函数指针
+	bi.PszDisplayName = &pathBuffer[0]                      // 接收显示名称的缓冲区
+	bi.LpszTitle, _ = syscall.UTF16PtrFromString("选择下载位置：") // 对话框标题
+	bi.Lpfn = syscall.NewCallback(browseCallback)           // 回调函数指针
 
 	// 2. 调用 Windows API 显示对话框
 	pidl := win.SHBrowseForFolder(&bi)
@@ -49,14 +45,8 @@ func OpenWinChooseFile() string {
 	ofn.LStructSize = uint32(unsafe.Sizeof(ofn))
 	ofn.LpstrFile = &fileName[0]
 	ofn.NMaxFile = uint32(len(fileName))
-	// var err error
 
 	ofn.LpstrFilter = nil
-	// ofn.LpstrFilter, err = syscall.UTF16PtrFromString("file") //\000*.*\000Text Files\000*.txt\000
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// ofn.NFilterIndex = 1
 	ofn.Flags = win.OFN_FILEMUSTEXIST | win.OFN_PATHMUSTEXIST
 
 	if win.GetOpenFileName(&ofn) {
@@ -74,10 +64,7 @@ func OpenWinSaveFileName() string {
 	ofn.LStructSize = uint32(unsafe.Sizeof(ofn))
 	ofn.LpstrFile = &fileName[0]
 	ofn.NMaxFile = uint32(len(fileName))
-	// r := utf16.Encode([]rune("所有文件(*.*)"))
-	// r = append(r, 0)
 	ofn.LpstrFilter = nil
-	// ofn.NFilterIndex = 1
 	ofn.Flags = win.OFN_FILEMUSTEXIST | win.OFN_PATHMUSTEXIST
 
 	if win.GetSaveFileName(&ofn) {

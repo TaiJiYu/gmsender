@@ -13,6 +13,9 @@ func TestFile(t *testing.T) {
 	flo := OpenWinFolder()
 	fmt.Println("文件夹：", filepath.Join(flo, "hahha.txt"))
 
+	flo = OpenWinFolder()
+	fmt.Println("文件夹：", filepath.Join(flo, "hahha.txt"))
+
 	// f := OpenWinSaveFileName()
 	// fmt.Println("内容：", f, filepath.Dir(f))
 }
