@@ -1,95 +1,45 @@
 package utils
 
 import (
-	"bytes"
-	"os/exec"
-	"runtime"
-	"strings"
-	"sync"
 	"syscall"
 	"unsafe"
 
-	"golang.org/x/text/transform"
-
 	"github.com/lxn/win"
-	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
 var defaultFolder string
 
-// decodeGBK 转换Windows下的GBK编码到UTF-8
-func decodeGBK(s []byte) (string, error) {
-	reader := transform.NewReader(bytes.NewReader(s), simplifiedchinese.GBK.NewDecoder())
-	buf := new(bytes.Buffer)
-	_, err := buf.ReadFrom(reader)
-	if err != nil {
-		return "", err
-	}
-	return buf.String(), nil
+// 定义一个回调函数，是 SHBrowseForFolder 需要的
+// 在这个最简单的实现中，它什么都不做，但必须存在
+func browseCallback(hwnd win.HWND, uMsg uint, lParam, lpData uintptr) uintptr {
+	return 0
 }
 
-// cleanPath 清理路径字符串
-func cleanPath(path string) string {
-	path = strings.TrimSpace(path)
-	// 处理macOS的路径前缀
-	if runtime.GOOS == "darwin" && strings.HasPrefix(path, "alias:") {
-		path = path[6:]
-	}
-	// 处理可能的换行符和引号
-	path = strings.Trim(path, "\n\r\"'")
-	return path
-}
+// 打开windows文件夹选择器
+func OpenWinFolder() string {
+	var bi win.BROWSEINFO
+	// var pathBuffer [win.MAX_PATH]uint16
+	pathBuffer := make([]uint16, win.MAX_PATH)
+	bi.PszDisplayName = &pathBuffer[0]                        // 接收显示名称的缓冲区
+	bi.LpszTitle, _ = syscall.UTF16PtrFromString("选择一个下载位置：") // 对话框标题
+	bi.Lpfn = syscall.NewCallback(browseCallback)             // 回调函数指针
 
-var muf sync.Mutex
-var folderDir string
-
-func chooseFolder() {
-	var cmd *exec.Cmd
-
-	switch runtime.GOOS {
-	case "windows":
-		// 使用PowerShell的FolderBrowserDialog
-		script := `Add-Type -AssemblyName System.Windows.Forms
-$folder = New-Object System.Windows.Forms.FolderBrowserDialog
-if($folder.ShowDialog() -eq "OK") { $folder.SelectedPath }`
-		cmd = exec.Command("powershell", "-Command", script)
-		// case "darwin":
-		// 	// macOS使用osascript
-		// 	cmd = exec.Command("osascript", "-e", `choose folder with prompt "选择文件夹"`)
-		// default:
-		// 	// Linux使用zenity
-		// 	cmd = exec.Command("zenity", "--file-selection", "--directory")
+	// 2. 调用 Windows API 显示对话框
+	pidl := win.SHBrowseForFolder(&bi)
+	if pidl == 0 {
+		return ""
 	}
 
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	if err := cmd.Run(); err == nil {
-		path := out.String()
-		if runtime.GOOS == "windows" {
-			if decoder, err := decodeGBK(out.Bytes()); err == nil {
-				path = decoder
-			} else {
-				path = ""
-			}
-		}
-		path = cleanPath(path)
-		// if runtime.GOOS == "darwin" {
-		// 	// macOS返回的路径格式需要处理
-		// 	path = path[7 : len(path)-1] // 去除前缀"alias:"和换行
-		// }
+	defer win.CoTaskMemFree(pidl) // 记得释放 PIDL 内存
 
-		muf.Lock()
-		folderDir = path
-		muf.Unlock()
-	} else {
-		folderDir = ""
+	// 3. 将用户选择的路径 (PIDL) 转换为可读的路径字符串
+	if !win.SHGetPathFromIDList(pidl, &pathBuffer[0]) {
+		return ""
 	}
-}
 
-// 打开windows文件夹选择
-func ChooseFolder() string {
-	chooseFolder()
-	return folderDir
+	// 4. 将 UTF-16 字节数组转换为 Go 字符串
+	selectedPath := syscall.UTF16ToString(pathBuffer[:])
+	return selectedPath
 }
 
 // 打开windows任意文件选择器

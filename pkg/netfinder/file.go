@@ -1,6 +1,9 @@
 package netfinder
 
-import "fmt"
+import (
+	"fmt"
+	"path/filepath"
+)
 
 // 文件结构
 type File struct {
@@ -12,4 +15,9 @@ type File struct {
 
 func (f File) addr() string {
 	return fmt.Sprintf("%s:%s", f.Ip, f.Port)
+}
+
+// 不包含路径的文件名
+func (f File) FileNamePure() string {
+	return filepath.Base(f.FileName)
 }

@@ -108,7 +108,7 @@ func (f *fileCmp) buttonFunc(bu *ui.ButtonUi) {
 		f.isDel = true
 	} else {
 		// 别人的
-		netfinder.DownLoadFile(utils.OpenWinSaveFileName(), f.file)
+		netfinder.DownLoadFile(utils.OpenWinFolder(), f.file)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"net"
 	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -283,7 +284,7 @@ const (
 )
 
 // 请求下载别人的文件
-func (f *finder) downloadFile(saveFileName string, info File) {
+func (f *finder) downloadFile(saveToFloderName string, info File) {
 	go func() {
 		for i := 0; i < retryTimesMax; i++ {
 			// 点对点链接
@@ -300,24 +301,19 @@ func (f *finder) downloadFile(saveFileName string, info File) {
 				_, err = conn.Write(message)
 				if err != nil {
 					// 接受失败，等会重试
-					fmt.Println(err)
 					time.Sleep(time.Duration(rand.IntN(3)+1) * time.Second)
 					continue
 				}
 
+				saveFileName := filepath.Join(saveToFloderName, info.FileNamePure())
+
 				// 接收文件
 				file, err := os.Create(saveFileName)
 				if err != nil {
-					fmt.Println(err)
 					break
 				}
-				if _, err := io.Copy(file, conn); err != nil {
-					fmt.Println(err)
-					file.Close()
-					// os.Remove(saveFileName)
-				} else {
-					file.Close()
-				}
+				io.Copy(file, conn)
+				file.Close()
 				break
 			}
 
