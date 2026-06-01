@@ -16,7 +16,6 @@ import (
 
 // 服务发现
 type finder struct {
-	chanCloseOnce            sync.Once
 	isExWating               atomic.Bool // 是否在延长等待期间
 	askMasterChan            chan time.Duration
 	askMasterOutChan         chan struct{} // 询问线程退出信号
@@ -43,27 +42,60 @@ type finder struct {
 }
 
 var (
-	finderCli  *finder
-	finderOnce sync.Once
+	finderCli *finder
+	finderMut sync.Mutex
 )
 
 func defaultFinder() *finder {
-	finderOnce.Do(func() {
+	finderMut.Lock()
+	if finderCli == nil {
 		finderCli = &finder{
 			isExWating:               atomic.Bool{},
 			askMasterChan:            make(chan time.Duration, 1),
 			askMasterOutChan:         make(chan struct{}, 1),
 			multicastListenerOutChan: make(chan struct{}, 1),
 			ptopTcpOutChan:           make(chan struct{}, 1),
-			lastWaitSec:              3 * time.Second,
 			files:                    make([]File, 0),
 			filesMap:                 make(map[File]struct{}),
 		}
+
+		finderCli.lastWaitSec = 3 * time.Second
 		finderCli.pTopTcpListener()
 		finderCli.broadcastListener()
 		finderCli.askMaster()
-	})
-	return finderCli
+	}
+	r := finderCli
+	finderMut.Unlock()
+	return r
+}
+
+// 刷新
+func (f *finder) reIn() {
+	// 之前没有初始化，不能执行
+	if f.isInitDoneB.Load() {
+		// 已经初始化过了
+		if f.selfIsMaster.Load() {
+			// master只需要问一下谁是master
+			f.broadcastCoon.WriteToUDP(askMasterBytes(), broadcastAddr)
+			time.Sleep(time.Second)
+			initDoneCallBack()
+		} else {
+			// 如果是节点需要先关闭广播请求重新问一下
+			f.broadcastCoon.Close()
+			f.broadcastCoon = nil
+			f.isClose.Store(false)
+			finderCli.broadcastListener()
+			finderCli.askMaster()
+		}
+	}
+}
+
+// 停止询问环节
+func (f *finder) closeAsk() {
+	if f.isClose.CompareAndSwap(false, true) {
+		f.askMasterOutChan <- struct{}{}         // 关闭询问
+		f.multicastListenerOutChan <- struct{}{} // 关闭询问监听
+	}
 }
 
 // 读取自己的文件列表
@@ -158,11 +190,13 @@ func (f *finder) pTopTcpListener() {
 // 组播监听
 func (f *finder) broadcastListener() {
 	// 绑定本地端口接收组播
-	conn, err := net.ListenUDP("udp", broadcastListenAddr)
-	if err != nil {
-		panic(err)
+	if f.broadcastCoon == nil {
+		conn, err := net.ListenUDP("udp", broadcastListenAddr)
+		if err != nil {
+			panic(err)
+		}
+		f.broadcastCoon = conn
 	}
-	f.broadcastCoon = conn
 
 	// 监听线程
 	go func() {
@@ -170,7 +204,7 @@ func (f *finder) broadcastListener() {
 		{
 		listenerLoop:
 			for {
-				n, err := conn.Read(buf)
+				n, err := f.broadcastCoon.Read(buf)
 				if err != nil {
 					continue
 				}
@@ -252,15 +286,6 @@ func (f *finder) handlerDownLoad(conn net.Conn) {
 	io.Copy(conn, fileS)
 	conn.Close()
 	fileS.Close()
-}
-
-// 停止询问环节
-func (f *finder) closeAsk() {
-	f.chanCloseOnce.Do(func() {
-		f.isClose.Store(true)
-		close(f.askMasterOutChan)
-		close(f.multicastListenerOutChan)
-	})
 }
 
 func (f *finder) saveMasterInfo(info baseInfo) {
@@ -374,7 +399,7 @@ func (f *finder) nodeLoop() {
 	for {
 		n, err := f.broadcastCoon.Read(buf)
 		if err != nil {
-			continue
+			return
 		}
 		f.nodeDecode(buf[:n])
 	}
@@ -389,6 +414,7 @@ func (f *finder) beNode() {
 	f.selfIsMaster.Store(false)
 	f.isInitDoneB.Store(true)
 	typeChangeCallback(false)
+	initDoneCallBack()
 	fmt.Println("node", Id())
 	// 监听线程
 	go f.nodeLoop()
@@ -405,6 +431,7 @@ func (f *finder) beMaster() {
 	f.selfIsMaster.Store(true)
 	f.isInitDoneB.Store(true)
 	typeChangeCallback(true)
+	initDoneCallBack()
 	fmt.Println("master", Id())
 
 	// 成为master后需要继续监听组播消息，给其他人回复master信息

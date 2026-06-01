@@ -4,10 +4,13 @@ package main
 var FillColor vec4
 var BoundColor vec4
 
+
 func Fragment(pos vec4, tex vec2, col vec4) vec4 {
+    bound := 2.0
+
     ltPos,size:=imageSrcRegionOnTexture()
     uv := tex - ltPos
-    b,c := roundCoreRect(uv,5,size,20)
+    b,c := roundCoreRect(uv,bound,size,20)
     return b*BoundColor+c*FillColor
 }
 

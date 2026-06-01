@@ -25,6 +25,7 @@ type gmsenderCli struct {
 
 	closeButton *ui.ButtonUi // 关闭按钮
 	smallButton *ui.ButtonUi // 缩小按钮
+	reInButton  *ui.ButtonUi // 重启按钮
 	topCanvas   *ui.CanvasUi // 顶部右侧栏位
 
 	midCanvas       *ui.CanvasUi // 中部区域的画布，主要功能区
@@ -87,14 +88,21 @@ func NewGMSender() *gmsenderCli {
 		sendercli.idText = hBox.AddKid(ui.NewStaticTextUiAsKid("ID:???", ui.SmallSize, idTextColor)).(*ui.TextUi)
 		sendercli.topCanvas.AddKid(hBox)
 
+		coloseImgX := float64(asset.CloseImg().Bounds().Dx())
+
 		sendercli.closeButton = ui.NewButton(asset.CloseImg(), utils.NewPoint(utils.LogicalSizeX, 0).Sub(utils.NewPoint(20, -20)).Sub(utils.NewPoint(asset.CloseImg().Bounds().Dx()/2, -asset.CloseImg().Bounds().Dy()/2)), utils.MM, gametime.BigTimerType)
 		sendercli.closeButton.SetCheckKey(input.GameMainReleasedAction, func(bu *ui.ButtonUi) {
 			sendercli.isClose = true
 		})
 
-		sendercli.smallButton = ui.NewButton(asset.SmallImg(), utils.NewPoint(utils.LogicalSizeX, 0).SubX(float64(asset.CloseImg().Bounds().Dx())+10).Sub(utils.NewPoint(20, -20)).Sub(utils.NewPoint(asset.SmallImg().Bounds().Dx()/2, -asset.SmallImg().Bounds().Dy()/2)), utils.MM, gametime.BigTimerType)
+		sendercli.smallButton = ui.NewButton(asset.SmallImg(), utils.NewPoint(utils.LogicalSizeX, 0).SubX(coloseImgX+10).Sub(utils.NewPoint(20, -20)).Sub(utils.NewPoint(asset.SmallImg().Bounds().Dx()/2, -asset.SmallImg().Bounds().Dy()/2)), utils.MM, gametime.BigTimerType)
 		sendercli.smallButton.SetCheckKey(input.GameMainReleasedAction, func(bu *ui.ButtonUi) {
 			sendercli.smallState.Go(toSmallState)
+		})
+
+		sendercli.reInButton = ui.NewButton(asset.ReinImg(), utils.NewPoint(utils.LogicalSizeX, 0).SubX((coloseImgX+10)*2).Sub(utils.NewPoint(20, -20)).Sub(utils.NewPoint(asset.ReinImg().Bounds().Dx()/2, -asset.ReinImg().Bounds().Dy()/2)), utils.MM, gametime.BigTimerType)
+		sendercli.reInButton.SetCheckKey(input.GameMainReleasedAction, func(bu *ui.ButtonUi) {
+			sendercli.smallState.Go(loadingState)
 		})
 
 		sendercli.midCanvas = ui.NewEmptyCanvasUi(utils.NewPoint(utils.LogicalSizeX/2, 60), utils.ML, 0)
@@ -128,14 +136,15 @@ func NewGMSender() *gmsenderCli {
 		loadingCanvas := ui.NewCoreRectCanvasUi(utils.ZeroPoint, utils.LL, backColor, 0).LockSize(utils.LogicalSize)
 		loadingChangeSec := (500 * time.Millisecond).Seconds()
 		loadingTimeLimit := (30 * time.Second).Seconds()
-		loadingCheckTImeMin := (5 * time.Second).Seconds()
+		// loadingCheckTImeMin := (5 * time.Second).Seconds()
 		isFaile := false
 		// 加载状态
 		sendercli.smallState.NewState(loadingState).SetEnterFunc(func() {
-			go netfinder.Init(sendercli.refreshFiles, sendercli.typeChange)
+			isFaile = false
+			netfinder.Init(sendercli.refreshFiles, sendercli.typeChange, func() {
+				sendercli.smallState.Go(bigState)
+			})
 		}).SetExitFunc(func() {
-			clear(loadingTexts)
-			loadingTexts = nil
 			sendercli.idText.SetText("ID:" + netfinder.Id())
 		}).BindUD(func() {
 			gametime.BigTimeRun()
@@ -148,13 +157,13 @@ func NewGMSender() *gmsenderCli {
 				input.InputUpdate()
 				sendercli.closeButton.Update(utils.NewPoint(ebiten.CursorPosition()))
 			}
-			if t > loadingCheckTImeMin {
-				if done, err := netfinder.IsInitDone(); err != nil {
-					isFaile = true
-				} else if done {
-					sendercli.smallState.Go(bigState)
-				}
-			}
+			// if t > loadingCheckTImeMin {
+			// 	if done, err := netfinder.IsInitDone(); err != nil {
+			// 		isFaile = true
+			// 	} else if done {
+			// 		sendercli.smallState.Go(bigState)
+			// 	}
+			// }
 		}, func(screen *ebiten.Image) {
 			screen.Clear()
 			loadingCanvas.Draw(screen)
@@ -192,6 +201,7 @@ func NewGMSender() *gmsenderCli {
 
 			sendercli.closeButton.Update(checkPos)
 			sendercli.smallButton.Update(checkPos)
+			sendercli.reInButton.Update(checkPos)
 			sendercli.choseFileButton.Update(checkPos)
 
 			if sendercli.filesVbox.CheckMouseInSlider(checkPos) {
@@ -203,6 +213,7 @@ func NewGMSender() *gmsenderCli {
 			sendercli.topCanvas.Draw(screen)
 			sendercli.closeButton.Draw(screen)
 			sendercli.smallButton.Draw(screen)
+			sendercli.reInButton.Draw(screen)
 
 			sendercli.midCanvas.Draw(screen)
 		})
@@ -219,6 +230,7 @@ func NewGMSender() *gmsenderCli {
 			sendercli.topCanvas.Draw(screen)
 			sendercli.closeButton.Draw(screen)
 			sendercli.smallButton.Draw(screen)
+			sendercli.reInButton.Draw(screen)
 
 			sendercli.midCanvas.Draw(screen)
 		})
@@ -262,6 +274,7 @@ func NewGMSender() *gmsenderCli {
 			sendercli.topCanvas.Draw(screen)
 			sendercli.closeButton.Draw(screen)
 			sendercli.smallButton.Draw(screen)
+			sendercli.reInButton.Draw(screen)
 
 			sendercli.midCanvas.Draw(screen)
 		})

@@ -26,6 +26,10 @@ var (
 	smallBallBytes []byte
 	smallBallImg   *ebiten.Image
 
+	//go:embed rein.png
+	reInBytes []byte
+	reInImg   *ebiten.Image
+
 	//go:embed done.ogg
 	doneMusicBytes []byte
 	doneMusic      *audio.Player
@@ -48,6 +52,12 @@ func init() {
 		panic(err)
 	} else {
 		smallBallImg = ebiten.NewImageFromImage(img)
+	}
+
+	if img, _, err := image.Decode(bytes.NewReader(reInBytes)); err != nil {
+		panic(err)
+	} else {
+		reInImg = ebiten.NewImageFromImage(img)
 	}
 	doneMusic = ogg(doneMusicBytes)
 }
@@ -84,6 +94,11 @@ func CloseImg() *ebiten.Image {
 func SmallImg() *ebiten.Image {
 	return smallImg
 }
+
+func ReinImg() *ebiten.Image {
+	return reInImg
+}
+
 func SmallBallImg() *ebiten.Image {
 	return smallBallImg
 }
