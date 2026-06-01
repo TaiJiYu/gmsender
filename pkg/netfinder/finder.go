@@ -232,7 +232,6 @@ func (f *finder) closeNetFinder() {
 func (f *finder) handlerDownLoad(conn net.Conn) {
 
 	buf := make([]byte, 32*1024)
-	fmt.Println("收到了下载请求handler")
 
 	n, err := conn.Read(buf)
 	if err != nil {
@@ -241,7 +240,6 @@ func (f *finder) handlerDownLoad(conn net.Conn) {
 
 	// 收到了文件请求
 	file := decodeDownloadFileInfo(buf[:n])
-	fmt.Println("收到了下载请求：", file)
 
 	fileS, err := os.Open(file)
 	if err != nil {
@@ -249,7 +247,7 @@ func (f *finder) handlerDownLoad(conn net.Conn) {
 		conn.Close()
 		return
 	}
-	fmt.Println(io.Copy(conn, fileS))
+	io.Copy(conn, fileS)
 	conn.Close()
 	fileS.Close()
 }
@@ -289,23 +287,17 @@ func (f *finder) downloadFile(saveFileName string, info File) {
 	go func() {
 		for i := 0; i < retryTimesMax; i++ {
 			// 点对点链接
-			fmt.Println("尝试链接")
 			conn, err := net.Dial("tcp", info.addr())
-			fmt.Println("链接完成：", err)
 			if err != nil {
 				// 链接出错，等待1-3秒后重试
-				fmt.Println(err)
 				time.Sleep(time.Duration(rand.IntN(3)+1) * time.Second)
 				continue
 			}
-			fmt.Println("请求下载：", err)
 
 			// 请求下载文件
 			for j := 0; j < retryTimesMax; j++ {
 				message := downLoadFileBytes(info.FileName)
-				fmt.Println("请求下载写文件入口")
 				_, err = conn.Write(message)
-				fmt.Println("写请求完成：", err)
 				if err != nil {
 					// 接受失败，等会重试
 					fmt.Println(err)
