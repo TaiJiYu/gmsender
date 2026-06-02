@@ -39,6 +39,7 @@ type gmsenderCli struct {
 
 	smallCacheImg    *ebiten.Image
 	smallWeekdayText *ui.TextUi // 缩小后的文本组件
+	weekDayShow      string     // 当前展示的周几
 	lastMouseTick    int64      // 上一次点击的帧数
 
 	isClose bool
@@ -70,13 +71,14 @@ func NewGMSender() *gmsenderCli {
 
 	senderOnce.Do(func() {
 		sendercli = &gmsenderCli{
-			sizex:            utils.LogicalSizeX,
-			sizey:            utils.LogicalSizeY,
-			smallCacheImg:    ebiten.NewImage(utils.SmallLogicalSize, utils.SmallLogicalSize),
-			smallWeekdayText: ui.NewStaticTextUi(utils.WeekStr(), ui.SmallSize, utils.NewPointT1(utils.SmallLogicalSize).Divf1(2), utils.MM, color.White),
-			lastMouseTick:    -1,
+			sizex:         utils.LogicalSizeX,
+			sizey:         utils.LogicalSizeY,
+			smallCacheImg: ebiten.NewImage(utils.SmallLogicalSize, utils.SmallLogicalSize),
+			weekDayShow:   utils.WeekStr(),
+			lastMouseTick: -1,
 		}
 		sendercli.smallCacheImg.DrawImage(asset.SmallBallImg(), utils.CopyDrawImageOp)
+		sendercli.smallWeekdayText = ui.NewStaticTextUi(sendercli.weekDayShow, ui.SmallSize, utils.NewPointT1(utils.SmallLogicalSize).Divf1(2), utils.MM, color.White)
 		sendercli.smallWeekdayText.Draw(sendercli.smallCacheImg)
 
 		sendercli.canvas = ui.NewCoreRectCanvasUi(utils.ZeroPoint, utils.LL, backColor, 0)
@@ -260,6 +262,12 @@ func NewGMSender() *gmsenderCli {
 			}
 			sendercli.moveScreen()
 
+			if utils.WeekStr() != sendercli.weekDayShow {
+				sendercli.smallWeekdayText.SetText(utils.WeekStr())
+				sendercli.smallCacheImg.DrawImage(asset.SmallBallImg(), utils.CopyDrawImageOp)
+				sendercli.smallWeekdayText.Draw(sendercli.smallCacheImg)
+
+			}
 		}, func(screen *ebiten.Image) {
 			screen.DrawImage(sendercli.smallCacheImg, utils.CopyDrawImageOp)
 		})
