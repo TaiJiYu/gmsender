@@ -2,6 +2,7 @@ package netfinder
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 func TestChanClose(t *testing.T) {
@@ -217,7 +220,7 @@ func TestBuffer(t *testing.T) {
 }
 
 func TestDownLoad(t *testing.T) {
-	b := downLoadFileBytes("https://chat.deepseek.com/a/chat/s/6fe57427-bd57-493c-ab34-c5aaeca4b877")
+	b := downLoadFileBytes("https://chat.deepseek.com/a/chat/s/6fe57427-bd57-493c-ab34-c5aaeca4b877", "")
 	buf := bytes.NewBuffer(make([]byte, 10))
 	fmt.Println(len(b), b)
 	fmt.Println(decodeDownloadFileInfo(b))
@@ -225,4 +228,13 @@ func TestDownLoad(t *testing.T) {
 	io.Copy(buf, bytes.NewReader(b))
 
 	fmt.Println(buf.Len(), buf)
+}
+
+func TestKeyPair(t *testing.T) {
+	nonce := make([]byte, chacha20poly1305.NonceSize)
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		fmt.Println("err", nonce)
+		return
+	}
+	fmt.Println(nonce)
 }

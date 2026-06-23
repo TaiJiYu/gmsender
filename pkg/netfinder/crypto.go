@@ -89,7 +89,7 @@ type encryptedConn struct {
 // 创建加密连接（发送方使用）
 func newEncryptedConn(conn net.Conn, sharedSecret []byte) (*encryptedConn, error) {
 	// 生成随机nonce
-	nonce := make([]byte, chacha20poly1305.NonceSize)
+	nonce := make([]byte, chacha20poly1305.NonceSizeX)
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return nil, fmt.Errorf("生成nonce失败: %w", err)
 	}
