@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"log"
 	"net"
 
 	"golang.org/x/crypto/chacha20poly1305"
@@ -88,7 +89,7 @@ type encryptedConn struct {
 
 // 创建加密连接（发送方使用）
 func newEncryptedConn(conn net.Conn, sharedSecret []byte) (*encryptedConn, error) {
-	// 生成随机nonce
+	// 生成随机nonce - XChaCha20-Poly1305需要24字节nonce
 	nonce := make([]byte, chacha20poly1305.NonceSizeX)
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return nil, fmt.Errorf("生成nonce失败: %w", err)
@@ -110,6 +111,33 @@ func newEncryptedConn(conn net.Conn, sharedSecret []byte) (*encryptedConn, error
 	}, nil
 }
 
+// 创建加密连接（接收方使用，需要传入发送方的nonce）
+func newEncryptedConnWithNonce(conn net.Conn, sharedSecret []byte, nonce []byte) (*encryptedConn, error) {
+	if len(nonce) != chacha20poly1305.NonceSizeX {
+		return nil, fmt.Errorf("无效的nonce长度，期望%d字节，实际%d字节", chacha20poly1305.NonceSizeX, len(nonce))
+	}
+
+	// 派生加密密钥
+	key := deriveEncryptionKey(sharedSecret)
+
+	// 创建加密器
+	cipher, err := chacha20poly1305.NewX(key)
+	if err != nil {
+		return nil, fmt.Errorf("创建加密器失败: %w", err)
+	}
+
+	return &encryptedConn{
+		conn:   conn,
+		cipher: cipher,
+		nonce:  nonce,
+	}, nil
+}
+
+// 获取当前nonce（发送方用于发送给接收方）
+func (ec *encryptedConn) getNonce() []byte {
+	return ec.nonce
+}
+
 // 递增nonce
 func (ec *encryptedConn) incrementNonce() {
 	for i := len(ec.nonce) - 1; i >= 0; i-- {
@@ -125,6 +153,7 @@ func (ec *encryptedConn) Write(p []byte) (n int, err error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
+	log.Printf("Write:%s\n", p)
 
 	// 加密数据
 	ciphertext := ec.cipher.Seal(nil, ec.nonce, p, nil)

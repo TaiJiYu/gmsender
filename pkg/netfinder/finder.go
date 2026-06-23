@@ -321,6 +321,12 @@ func (f *finder) handlerDownLoad(conn net.Conn) {
 		}
 		defer encryptedConn.Close()
 
+		// 先发送nonce给客户端
+		if _, err := conn.Write(encryptedConn.getNonce()); err != nil {
+			fmt.Printf("发送nonce失败: %v\n", err)
+			return
+		}
+
 		// 流式加密发送
 		io.Copy(encryptedConn, fileS)
 	} else {
@@ -402,8 +408,18 @@ func (f *finder) downloadFile(saveToFloderName string, info File) {
 					break
 				}
 
-				// 创建加密连接
-				encryptedConn, err := newEncryptedConn(conn, sharedSecret)
+				// 先读取服务端发送的nonce
+				nonce := make([]byte, 24) // XChaCha20-Poly1305需要24字节nonce
+				n, err := io.ReadFull(conn, nonce)
+				if err != nil || n != 24 {
+					fmt.Printf("读取nonce失败: %v\n", err)
+					file.Close()
+					conn.Close()
+					break
+				}
+
+				// 使用服务端的nonce创建加密连接
+				encryptedConn, err := newEncryptedConnWithNonce(conn, sharedSecret, nonce)
 				if err != nil {
 					fmt.Printf("创建加密连接失败: %v\n", err)
 					file.Close()

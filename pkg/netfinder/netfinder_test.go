@@ -238,3 +238,95 @@ func TestKeyPair(t *testing.T) {
 	}
 	fmt.Println(nonce)
 }
+
+func TestCrypto(t *testing.T) {
+	// 测试1: ECDH密钥对生成
+	aliceKey, err := generateKeyPair()
+	if err != nil {
+		t.Fatalf("生成Alice密钥对失败: %v", err)
+	}
+
+	bobKey, err := generateKeyPair()
+	if err != nil {
+		t.Fatalf("生成Bob密钥对失败: %v", err)
+	}
+
+	// 测试2: 公钥获取
+	if aliceKey.publicKeyBase64() == "" {
+		t.Error("Alice公钥为空")
+	}
+	if bobKey.publicKeyBase64() == "" {
+		t.Error("Bob公钥为空")
+	}
+
+	// 测试3: ECDH密钥交换（双方计算相同的共享密钥）
+	aliceShared, err := aliceKey.computeSharedSecret(bobKey.publicKeyBase64())
+	if err != nil {
+		t.Fatalf("Alice计算共享密钥失败: %v", err)
+	}
+
+	bobShared, err := bobKey.computeSharedSecret(aliceKey.publicKeyBase64())
+	if err != nil {
+		t.Fatalf("Bob计算共享密钥失败: %v", err)
+	}
+
+	// 验证双方共享密钥相同
+	if string(aliceShared) != string(bobShared) {
+		t.Error("双方共享密钥不一致")
+	}
+
+	// 测试4: 流式加密解密（模拟TCP连接）
+	// 创建双向管道模拟网络连接
+	aliceConn, bobConn := net.Pipe()
+
+	// Alice端创建加密连接（发送方）
+	aliceEncrypted, err := newEncryptedConn(aliceConn, aliceShared)
+	if err != nil {
+		t.Fatalf("创建Alice加密连接失败: %v", err)
+	}
+
+	// 发送方先发送nonce给接收方
+	go func() {
+		// 发送nonce
+		aliceConn.Write(aliceEncrypted.getNonce())
+	}()
+
+	// 接收方先读取nonce
+	nonce := make([]byte, 24)
+	n, err := bobConn.Read(nonce)
+	if err != nil || n != 24 {
+		t.Fatalf("读取nonce失败: %v", err)
+	}
+
+	// Bob端创建加密连接（接收方，使用发送方的nonce）
+	bobEncrypted, err := newEncryptedConnWithNonce(bobConn, bobShared, nonce)
+	if err != nil {
+		t.Fatalf("创建Bob加密连接失败: %v", err)
+	}
+
+	// 测试数据
+	testData := []byte("Hello, World! 这是一个端到端加密测试。")
+
+	// Alice加密发送数据
+	go func() {
+		defer aliceEncrypted.Close()
+		_, err := aliceEncrypted.Write(testData)
+		if err != nil {
+			t.Errorf("Alice加密写入失败: %v", err)
+		}
+	}()
+
+	// Bob解密接收数据
+	buf := make([]byte, 1024)
+	n, err = bobEncrypted.Read(buf)
+	if err != nil {
+		t.Fatalf("Bob解密读取失败: %v", err)
+	}
+
+	// 验证解密后的数据与原始数据一致
+	if string(buf[:n]) != string(testData) {
+		t.Errorf("解密数据不匹配\n期望: %s\n实际: %s", string(testData), string(buf[:n]))
+	}
+
+	t.Log("所有加密解密测试通过！")
+}
