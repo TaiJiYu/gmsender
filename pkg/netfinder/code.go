@@ -213,17 +213,34 @@ func decodeOrder(b byte) netOrder {
 }
 
 // 请求文件下载的信息
-func downLoadFileBytes(fileName string) []byte {
-	return append([]byte{byte(downLoadFileNetOrder)}, []byte(fileName)...)
+type downloadRequest struct {
+	FileName string `json:"file_name"`
+	PubKey   string `json:"pub_key"`
 }
 
-// 解码下载信息
-func decodeDownloadFileInfo(data []byte) string {
+// 请求文件下载（带公钥）
+func downLoadFileBytes(fileName, pubKey string) []byte {
+	req := downloadRequest{
+		FileName: fileName,
+		PubKey:   pubKey,
+	}
+	data, _ := json.Marshal(req)
+	return append([]byte{byte(downLoadFileNetOrder)}, data...)
+}
+
+// 解码下载请求（支持带公钥的新格式和旧的纯文件名格式）
+func decodeDownloadFileInfo(data []byte) downloadRequest {
 	if len(data) < 1 {
-		return ""
+		return downloadRequest{}
 	}
+
 	if decodeOrder(data[0]) == downLoadFileNetOrder {
-		return string(data[1:])
+		req := downloadRequest{}
+		if err := json.Unmarshal(data[1:], &req); err != nil {
+			// 尝试兼容旧的纯文件名格式
+			return downloadRequest{FileName: string(data[1:])}
+		}
+		return req
 	}
-	return ""
+	return downloadRequest{}
 }

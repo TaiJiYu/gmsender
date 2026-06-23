@@ -11,6 +11,7 @@ type File struct {
 	Port     string `json:"port"`      // 用于下载该文件的对应端口
 	Id       string `json:"id"`        // 文件所属id，用于判读是否是自己的
 	FileName string `json:"file_name"` // 文件名
+	PubKey   string `json:"pub_key"`   // 用于加密的公钥（Base64编码）
 }
 
 func (f File) addr() string {

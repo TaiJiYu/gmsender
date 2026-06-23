@@ -39,6 +39,9 @@ type finder struct {
 	fileLock sync.RWMutex      // 文件锁
 	files    []File            // 公开的文件列表
 	filesMap map[File]struct{} // 去重检查
+
+	// 加密相关
+	keyManager *keyManager // ECDH密钥对管理器
 }
 
 var (
@@ -49,6 +52,12 @@ var (
 func defaultFinder() *finder {
 	finderMut.Lock()
 	if finderCli == nil {
+		// 生成ECDH密钥对用于端到端加密
+		keyMgr, err := generateKeyPair()
+		if err != nil {
+			fmt.Printf("生成加密密钥对失败: %v\n", err)
+		}
+
 		finderCli = &finder{
 			isExWating:               atomic.Bool{},
 			askMasterChan:            make(chan time.Duration, 1),
@@ -57,6 +66,7 @@ func defaultFinder() *finder {
 			ptopTcpOutChan:           make(chan struct{}, 1),
 			files:                    make([]File, 0),
 			filesMap:                 make(map[File]struct{}),
+			keyManager:               keyMgr,
 		}
 
 		finderCli.lastWaitSec = 3 * time.Second
@@ -276,18 +286,49 @@ func (f *finder) handlerDownLoad(conn net.Conn) {
 		fmt.Println(err)
 	}
 
-	// 收到了文件请求
-	file := decodeDownloadFileInfo(buf[:n])
+	// 解码下载请求（包含文件名和客户端公钥）
+	req := decodeDownloadFileInfo(buf[:n])
+	if req.FileName == "" {
+		conn.Close()
+		return
+	}
 
-	fileS, err := os.Open(file)
+	// 打开文件
+	fileS, err := os.Open(req.FileName)
 	if err != nil {
 		// 文件错误
 		conn.Close()
 		return
 	}
-	io.Copy(conn, fileS)
+	defer fileS.Close()
+
+	// 如果客户端提供了公钥，则使用加密传输
+	if req.PubKey != "" && f.keyManager != nil {
+		// 计算共享密钥
+		sharedSecret, err := f.keyManager.computeSharedSecret(req.PubKey)
+		if err != nil {
+			fmt.Printf("计算共享密钥失败: %v\n", err)
+			conn.Close()
+			return
+		}
+
+		// 创建加密连接
+		encryptedConn, err := newEncryptedConn(conn, sharedSecret)
+		if err != nil {
+			fmt.Printf("创建加密连接失败: %v\n", err)
+			conn.Close()
+			return
+		}
+		defer encryptedConn.Close()
+
+		// 流式加密发送
+		io.Copy(encryptedConn, fileS)
+	} else {
+		// 兼容旧版本：不使用加密
+		io.Copy(conn, fileS)
+	}
+
 	conn.Close()
-	fileS.Close()
 }
 
 func (f *finder) saveMasterInfo(info baseInfo) {
@@ -323,31 +364,65 @@ func (f *finder) downloadFile(saveToFloderName string, info File) {
 				continue
 			}
 
-			// 请求下载文件
-			for j := 0; j < retryTimesMax; j++ {
-				message := downLoadFileBytes(info.FileName)
-				_, err = conn.Write(message)
-				if err != nil {
-					// 接受失败，等会重试
-					time.Sleep(time.Duration(rand.IntN(3)+1) * time.Second)
-					continue
-				}
-
-				saveFileName := filepath.Join(saveToFloderName, info.FileNamePure())
-
-				// 接收文件
-				file, err := os.Create(saveFileName)
-				if err != nil {
-					break
-				}
-				if _, err := io.Copy(file, conn); err == nil {
-					asset.PlayDoneMusic()
-				}
-				file.Close()
+			// 生成临时密钥对用于本次下载
+			privKey, err := generateKeyPair()
+			if err != nil {
+				fmt.Printf("生成临时密钥对失败: %v\n", err)
+				conn.Close()
 				break
 			}
 
-			conn.Close()
+			// 请求下载文件（携带公钥）
+			message := downLoadFileBytes(info.FileName, privKey.publicKeyBase64())
+			_, err = conn.Write(message)
+			if err != nil {
+				// 接受失败，等会重试
+				time.Sleep(time.Duration(rand.IntN(3)+1) * time.Second)
+				conn.Close()
+				continue
+			}
+
+			saveFileName := filepath.Join(saveToFloderName, info.FileNamePure())
+
+			// 接收文件
+			file, err := os.Create(saveFileName)
+			if err != nil {
+				conn.Close()
+				break
+			}
+
+			// 如果服务端提供了公钥，则使用加密接收
+			if info.PubKey != "" && f.keyManager != nil {
+				// 计算共享密钥
+				sharedSecret, err := privKey.computeSharedSecret(info.PubKey)
+				if err != nil {
+					fmt.Printf("计算共享密钥失败: %v\n", err)
+					file.Close()
+					conn.Close()
+					break
+				}
+
+				// 创建加密连接
+				encryptedConn, err := newEncryptedConn(conn, sharedSecret)
+				if err != nil {
+					fmt.Printf("创建加密连接失败: %v\n", err)
+					file.Close()
+					conn.Close()
+					break
+				}
+
+				// 流式解密接收
+				if _, err := io.Copy(file, encryptedConn); err == nil {
+					asset.PlayDoneMusic()
+				}
+				encryptedConn.Close()
+			} else {
+				// 兼容旧版本：不使用加密
+				if _, err := io.Copy(file, conn); err == nil {
+					asset.PlayDoneMusic()
+				}
+			}
+			file.Close()
 			break
 		}
 	}()
@@ -360,6 +435,7 @@ func (f *finder) publicFile(filename string) {
 		Port:     fmt.Sprintf("%v", getLocalTcpPort()),
 		Id:       Id(),
 		FileName: filename,
+		PubKey:   f.keyManager.publicKeyBase64(), // 添加ECDH公钥用于端到端加密
 	}
 	if f.selfIsMaster.Load() {
 		// 自己master

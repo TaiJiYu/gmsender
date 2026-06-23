@@ -14,12 +14,6 @@ func Init(filesCallbackFunc func(files []File), typeChangeCallbackFunc func(isMa
 	go defaultFinder().reIn()
 }
 
-// // 是否初始化完成
-// // 返回是否初始化完成和是否有错误
-// func IsInitDone() (bool, error) {
-// 	return defaultFinder().isInitDone()
-// }
-
 // 本机id
 func Id() string {
 	return id
