@@ -426,16 +426,20 @@ func (f *finder) downloadFile(saveToFloderName string, info File) {
 					conn.Close()
 					break
 				}
-
 				// 流式解密接收
-				if _, err := io.Copy(file, encryptedConn); err == nil {
+				if _, err := io.Copy(file, encryptedConn); err == nil || err == io.EOF {
 					asset.PlayDoneMusic()
+				} else {
+					fmt.Println(err)
+					asset.PlayFailMusic()
 				}
 				encryptedConn.Close()
 			} else {
 				// 兼容旧版本：不使用加密
-				if _, err := io.Copy(file, conn); err == nil {
+				if _, err := io.Copy(file, conn); err == nil || err == io.EOF {
 					asset.PlayDoneMusic()
+				} else {
+					asset.PlayFailMusic()
 				}
 			}
 			file.Close()

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
-	"log"
 	"net"
 
 	"golang.org/x/crypto/chacha20poly1305"
@@ -153,7 +152,6 @@ func (ec *encryptedConn) Write(p []byte) (n int, err error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
-	log.Printf("Write:%s\n", p)
 
 	// 加密数据
 	ciphertext := ec.cipher.Seal(nil, ec.nonce, p, nil)
@@ -186,6 +184,9 @@ func (ec *encryptedConn) Read(p []byte) (n int, err error) {
 	// 读取加密数据长度
 	lengthBytes := make([]byte, 4)
 	if _, err := io.ReadFull(ec.conn, lengthBytes); err != nil {
+		if err == io.EOF {
+			return 0, io.EOF
+		}
 		return 0, fmt.Errorf("读取数据长度失败: %w", err)
 	}
 
@@ -194,9 +195,18 @@ func (ec *encryptedConn) Read(p []byte) (n int, err error) {
 		(uint32(lengthBytes[2]) << 8) |
 		uint32(lengthBytes[3])
 
+	// XChaCha20-Poly1305 加密数据至少需要16字节（包含认证标签）
+	// 当文件传输完成后，可能会读取到长度为0或小于16的边界数据
+	if length == 0 || length < 16 {
+		return 0, io.EOF
+	}
+
 	// 读取加密数据
 	ciphertext := make([]byte, length)
 	if _, err := io.ReadFull(ec.conn, ciphertext); err != nil {
+		if err == io.EOF {
+			return 0, io.EOF
+		}
 		return 0, fmt.Errorf("读取加密数据失败: %w", err)
 	}
 

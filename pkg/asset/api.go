@@ -35,6 +35,10 @@ var (
 	doneMusicBytes []byte
 	doneMusic      *audio.Player
 
+	//go:embed fail.ogg
+	failMusicBytes []byte
+	failMusic      *audio.Player
+
 	//go:embed favicon.ico
 	icoBytes []byte
 	icoImgs  []image.Image
@@ -71,6 +75,7 @@ func init() {
 		icoImgs = imgs
 	}
 	doneMusic = ogg(doneMusicBytes)
+	failMusic = ogg(failMusicBytes)
 }
 
 func Ico() []image.Image {
@@ -96,6 +101,12 @@ func ogg(oggBytes []byte) *audio.Player {
 func PlayDoneMusic() {
 	doneMusic.Rewind()
 	doneMusic.Play()
+}
+
+// 播放失败音效
+func PlayFailMusic() {
+	failMusic.Rewind()
+	failMusic.Play()
 }
 
 func FontData() []byte {
