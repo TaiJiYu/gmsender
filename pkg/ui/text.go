@@ -138,6 +138,9 @@ func (t *TextUi) SetText(s string) {
 }
 
 func (t *TextUi) setText(s string) {
+	if s == "" {
+		s = " "
+	}
 	if t.s == s {
 		return
 	}
@@ -163,7 +166,7 @@ func (t *TextUi) setText(s string) {
 
 // 修改颜色
 func (t *TextUi) SetColor(c color.Color) {
-	if t.color == c {
+	if t.color == c || t.img == nil {
 		return
 	}
 	t.color = c
@@ -191,6 +194,9 @@ func (t *TextUi) setOp(offset utils.Point) {
 }
 
 func (t *TextUi) Draw(screen *ebiten.Image) {
+	if t.img == nil {
+		return
+	}
 	screen.DrawImage(t.img, t.op)
 }
 

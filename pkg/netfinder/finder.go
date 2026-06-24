@@ -508,7 +508,6 @@ func (f *finder) downloadFile(saveToFloderName string, info File, progressCallba
 						break
 					}
 					downloaded += int64(n)
-					fmt.Println("all:", totalSize)
 					if progressCallback != nil && totalSize > 0 {
 						progressCallback(downloaded, totalSize)
 					}

@@ -10,14 +10,39 @@ import (
 	"gmsender/utils"
 	"image/color"
 	"path/filepath"
+	"time"
 )
 
 const (
 	// 文件列表尺寸
 	fileListX = utils.LogicalSizeX - 40*2
-	// 单个文件高度
-	fileY = 50
+	// 单个文件高度（增加一行的高度）
+	fileY = 70
 )
+
+// formatFileSize 格式化文件大小为合适的单位
+func formatFileSize(bytes int64) string {
+	if bytes < 1024 {
+		return fmt.Sprintf("%d B", bytes)
+	} else if bytes < 1024*1024 {
+		return fmt.Sprintf("%.1f KB", float64(bytes)/1024)
+	} else if bytes < 1024*1024*1024 {
+		return fmt.Sprintf("%.1f MB", float64(bytes)/(1024*1024))
+	} else {
+		return fmt.Sprintf("%.2f GB", float64(bytes)/(1024*1024*1024))
+	}
+}
+
+// formatSpeed 格式化下载速度
+func formatSpeed(bytesPerSecond float64) string {
+	if bytesPerSecond < 1024 {
+		return fmt.Sprintf("%d B/s", int(bytesPerSecond))
+	} else if bytesPerSecond < 1024*1024 {
+		return fmt.Sprintf("%.1f KB/s", bytesPerSecond/1024)
+	} else {
+		return fmt.Sprintf("%.1f MB/s", bytesPerSecond/(1024*1024))
+	}
+}
 
 // 公开文件列表
 type fileList struct {
@@ -74,16 +99,19 @@ type fileCmp struct {
 	canvas, funcCanvas *ui.CanvasUi
 	button             *ui.ButtonUi
 
-	fileNameText, orginText, funcText *ui.TextUi //funcText是功能文本
+	fileNameText, orginText, funcText, progressText *ui.TextUi //funcText是功能文本，progressText是进度文本
 
 	file netfinder.File
 
 	isDel bool
 
 	// 下载状态
-	downloading bool
-	downloaded  int64
-	totalSize   int64
+	downloading    bool
+	downloaded     int64
+	totalSize      int64
+	lastDownloaded int64   // 上次记录的下载量，用于计算速度
+	lastUpdateTime int64   // 上次更新时间戳
+	currentSpeed   float64 // 当前下载速度（字节/秒）
 }
 
 func (f *fileCmp) changeByFile(file netfinder.File) {
@@ -117,21 +145,40 @@ func (f *fileCmp) buttonFunc(bu *ui.ButtonUi) {
 		if f.downloading {
 			return // 下载中，不允许重复点击
 		}
+		folderName := utils.OpenWinFolder()
+		if folderName == "" {
+			return
+		}
 
 		f.downloading = true
 		f.downloaded = 0
 		f.totalSize = 0
+		f.lastDownloaded = 0
+		f.lastUpdateTime = time.Now().UnixNano()
+		f.currentSpeed = 0
 		f.button.SetFillColor(downloadingColor, downloadingColor)
-		f.funcText.SetText("0%")
+		f.funcText.SetText("下载中")
+		f.funcText.AddSpaceToSizeX(100)
 
-		netfinder.DownLoadFile(utils.OpenWinFolder(), f.file,
+		netfinder.DownLoadFile(folderName, f.file,
 			func(downloaded int64, total int64) {
 				f.downloaded = downloaded
 				f.totalSize = total
-				fmt.Println(downloaded, total)
+
+				// 计算下载速度
+				currentTime := time.Now().UnixNano()
+				timeDiff := float64(currentTime-f.lastUpdateTime) / 1e9 // 转换为秒
+				if timeDiff > 0.1 {                                     // 至少0.1秒才更新速度
+					bytesDiff := downloaded - f.lastDownloaded
+					f.currentSpeed = float64(bytesDiff) / timeDiff
+					f.lastDownloaded = downloaded
+					f.lastUpdateTime = currentTime
+				}
+
 				if total > 0 {
 					percent := int(float64(downloaded) / float64(total) * 100)
-					f.funcText.SetText(fmt.Sprintf("%d%%", percent))
+					sizeStr := formatFileSize(total)
+					f.progressText.SetText(fmt.Sprintf("%d%% %s / %s", percent, formatFileSize(downloaded), sizeStr))
 				}
 			},
 			func(status string) {
@@ -140,11 +187,13 @@ func (f *fileCmp) buttonFunc(bu *ui.ButtonUi) {
 					f.funcText.SetText("下载")
 					f.funcText.AddSpaceToSizeX(100)
 					f.button.SetFillColor(downloadColor, downloadColor)
+					// f.progressText.SetText("")
 				} else if status == "failed" {
 					f.downloading = false
 					f.funcText.SetText("下载")
 					f.funcText.AddSpaceToSizeX(100)
 					f.button.SetFillColor(downloadColor, downloadColor)
+					// f.progressText.SetText("下载失败")
 				}
 			},
 		)
@@ -161,9 +210,16 @@ func newFileCmp(file netfinder.File) *fileCmp {
 
 	hBox := ui.NewHorizontalBox(0)
 
-	vbox := ui.NewVerticalBox(5).LockSize(utils.NewPoint(fileListX-20-100, fileY))
+	vbox := ui.NewVerticalBox(3).LockSize(utils.NewPoint(fileListX-20-100, fileY))
+
+	// 第一行：文件名
 	f.fileNameText = vbox.AddKid(ui.NewStaticTextUiAsKid(filepath.Base(file.FileName), ui.SmallSize, fileTextColor)).(*ui.TextUi)
+
+	// 第二行：文件来源
 	f.orginText = vbox.AddKid(ui.NewStaticTextUiAsKid("-来自["+file.Id+"]", ui.SmallSize, fileTextColor)).(*ui.TextUi)
+
+	// 第三行：进度文本（默认显示 "-"）
+	f.progressText = vbox.AddKid(ui.NewStaticTextUiAsKid("-", ui.SmallSize, fileProgressColor)).(*ui.TextUi)
 
 	hBox.AddKid(vbox)
 	var funcText string
