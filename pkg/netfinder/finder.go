@@ -302,6 +302,15 @@ func (f *finder) handlerDownLoad(conn net.Conn) {
 	}
 	defer fileS.Close()
 
+	// 获取文件大小
+	fileInfo, err := fileS.Stat()
+	if err != nil {
+		fmt.Printf("获取文件信息失败: %v\n", err)
+		conn.Close()
+		return
+	}
+	fileSize := fileInfo.Size()
+
 	// 如果客户端提供了公钥，则使用加密传输
 	if req.PubKey != "" && f.keyManager != nil {
 		// 计算共享密钥
@@ -327,10 +336,41 @@ func (f *finder) handlerDownLoad(conn net.Conn) {
 			return
 		}
 
+		// 先发送文件大小（8字节）
+		sizeBuf := make([]byte, 8)
+		sizeBuf[0] = byte(fileSize)
+		sizeBuf[1] = byte(fileSize >> 8)
+		sizeBuf[2] = byte(fileSize >> 16)
+		sizeBuf[3] = byte(fileSize >> 24)
+		sizeBuf[4] = byte(fileSize >> 32)
+		sizeBuf[5] = byte(fileSize >> 40)
+		sizeBuf[6] = byte(fileSize >> 48)
+		sizeBuf[7] = byte(fileSize >> 56)
+		fmt.Println("sendBuf:", sizeBuf)
+		if _, err := encryptedConn.Write(sizeBuf); err != nil {
+			fmt.Printf("发送文件大小失败: %v\n", err)
+			return
+		}
+
 		// 流式加密发送
 		io.Copy(encryptedConn, fileS)
 	} else {
 		// 兼容旧版本：不使用加密
+		// 先发送文件大小（8字节）
+		sizeBuf := make([]byte, 8)
+		sizeBuf[0] = byte(fileSize)
+		sizeBuf[1] = byte(fileSize >> 8)
+		sizeBuf[2] = byte(fileSize >> 16)
+		sizeBuf[3] = byte(fileSize >> 24)
+		sizeBuf[4] = byte(fileSize >> 32)
+		sizeBuf[5] = byte(fileSize >> 40)
+		sizeBuf[6] = byte(fileSize >> 48)
+		sizeBuf[7] = byte(fileSize >> 56)
+		if _, err := conn.Write(sizeBuf); err != nil {
+			fmt.Printf("发送文件大小失败: %v\n", err)
+			return
+		}
+
 		io.Copy(conn, fileS)
 	}
 
@@ -359,8 +399,12 @@ const (
 )
 
 // 请求下载别人的文件
-func (f *finder) downloadFile(saveToFloderName string, info File) {
+func (f *finder) downloadFile(saveToFloderName string, info File, progressCallback func(downloaded int64, total int64), statusCallback func(status string)) {
 	go func() {
+		if statusCallback != nil {
+			statusCallback("started")
+		}
+
 		for i := 0; i < retryTimesMax; i++ {
 			// 点对点链接
 			conn, err := net.Dial("tcp", info.addr())
@@ -397,6 +441,9 @@ func (f *finder) downloadFile(saveToFloderName string, info File) {
 				break
 			}
 
+			var reader io.Reader = conn
+			var totalSize int64 = 0
+
 			// 如果服务端提供了公钥，则使用加密接收
 			if info.PubKey != "" && f.keyManager != nil {
 				// 计算共享密钥
@@ -426,23 +473,69 @@ func (f *finder) downloadFile(saveToFloderName string, info File) {
 					conn.Close()
 					break
 				}
-				// 流式解密接收
-				if _, err := io.Copy(file, encryptedConn); err == nil || err == io.EOF {
-					asset.PlayDoneMusic()
-				} else {
-					fmt.Println(err)
-					asset.PlayFailMusic()
+				defer encryptedConn.Close()
+				reader = encryptedConn
+			}
+
+			// 先读取文件大小（8字节）
+			sizeBuf := make([]byte, 8)
+			_, err = io.ReadFull(reader, sizeBuf)
+			if err != nil {
+				fmt.Printf("读取文件大小失败: %v\n", err)
+				file.Close()
+				if info.PubKey != "" && f.keyManager != nil {
+					conn.Close()
 				}
-				encryptedConn.Close()
-			} else {
-				// 兼容旧版本：不使用加密
-				if _, err := io.Copy(file, conn); err == nil || err == io.EOF {
-					asset.PlayDoneMusic()
-				} else {
-					asset.PlayFailMusic()
+				break
+			}
+			totalSize = int64(sizeBuf[0]) | int64(sizeBuf[1])<<8 | int64(sizeBuf[2])<<16 | int64(sizeBuf[3])<<24 |
+				int64(sizeBuf[4])<<32 | int64(sizeBuf[5])<<40 | int64(sizeBuf[6])<<48 | int64(sizeBuf[7])<<56
+
+			if statusCallback != nil {
+				statusCallback("downloading")
+			}
+
+			// 分块读取并报告进度
+			buffer := make([]byte, 32*1024) // 32KB 缓冲区
+			var downloaded int64
+
+			for {
+				n, err := reader.Read(buffer)
+				if n > 0 {
+					_, writeErr := file.Write(buffer[:n])
+					if writeErr != nil {
+						fmt.Printf("写入文件失败: %v\n", writeErr)
+						break
+					}
+					downloaded += int64(n)
+					fmt.Println("all:", totalSize)
+					if progressCallback != nil && totalSize > 0 {
+						progressCallback(downloaded, totalSize)
+					}
+				}
+				if err != nil {
+					if err == io.EOF {
+						if statusCallback != nil {
+							statusCallback("completed")
+						}
+						asset.PlayDoneMusic()
+					} else {
+						fmt.Println(err)
+						if statusCallback != nil {
+							statusCallback("failed")
+						}
+						asset.PlayFailMusic()
+					}
+					break
 				}
 			}
+
 			file.Close()
+			if info.PubKey != "" && f.keyManager != nil {
+				conn.Close()
+			} else {
+				conn.Close()
+			}
 			break
 		}
 	}()

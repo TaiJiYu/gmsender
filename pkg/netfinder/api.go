@@ -34,12 +34,14 @@ func DelPublicFile(file File) {
 
 // 下载文件
 // saveToFloderName是存储位置，info是请求的文件
-func DownLoadFile(saveToFloderName string, info File) {
+// progressCallback是进度回调，参数为(已下载字节数, 总字节数)
+// statusCallback是状态回调，参数为状态字符串
+func DownLoadFile(saveToFloderName string, info File, progressCallback func(downloaded int64, total int64), statusCallback func(status string)) {
 	if saveToFloderName == "" {
 		// 保存位置不得为空
 		return
 	}
-	defaultFinder().downloadFile(saveToFloderName, info)
+	defaultFinder().downloadFile(saveToFloderName, info, progressCallback, statusCallback)
 }
 
 // 关闭网络

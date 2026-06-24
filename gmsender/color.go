@@ -8,6 +8,7 @@ var (
 	backColor = utils.ColorRGBByOx(0x6d6766) // 背景色
 
 	downloadColor  = utils.ColorRGBByOx(0x91b5a9) // 下载按钮颜色
+	downloadingColor = utils.ColorRGBByOx(0x6b8e23) // 下载中按钮颜色
 	closeFileColor = utils.ColorRGBByOx(0xd98481) // 关闭自己的公开文件按钮颜色
 
 	choiseColor     = utils.ColorRGBByOx(0xedca7f) // 选择文件公开按钮颜色

@@ -2,6 +2,7 @@ package gmsender
 
 import (
 	"container/list"
+	"fmt"
 	gametime "gmsender/pkg/game_time"
 	"gmsender/pkg/input"
 	"gmsender/pkg/netfinder"
@@ -78,6 +79,11 @@ type fileCmp struct {
 	file netfinder.File
 
 	isDel bool
+
+	// 下载状态
+	downloading bool
+	downloaded  int64
+	totalSize   int64
 }
 
 func (f *fileCmp) changeByFile(file netfinder.File) {
@@ -108,7 +114,40 @@ func (f *fileCmp) buttonFunc(bu *ui.ButtonUi) {
 		f.isDel = true
 	} else {
 		// 别人的
-		netfinder.DownLoadFile(utils.OpenWinFolder(), f.file)
+		if f.downloading {
+			return // 下载中，不允许重复点击
+		}
+
+		f.downloading = true
+		f.downloaded = 0
+		f.totalSize = 0
+		f.button.SetFillColor(downloadingColor, downloadingColor)
+		f.funcText.SetText("0%")
+
+		netfinder.DownLoadFile(utils.OpenWinFolder(), f.file,
+			func(downloaded int64, total int64) {
+				f.downloaded = downloaded
+				f.totalSize = total
+				fmt.Println(downloaded, total)
+				if total > 0 {
+					percent := int(float64(downloaded) / float64(total) * 100)
+					f.funcText.SetText(fmt.Sprintf("%d%%", percent))
+				}
+			},
+			func(status string) {
+				if status == "completed" {
+					f.downloading = false
+					f.funcText.SetText("下载")
+					f.funcText.AddSpaceToSizeX(100)
+					f.button.SetFillColor(downloadColor, downloadColor)
+				} else if status == "failed" {
+					f.downloading = false
+					f.funcText.SetText("下载")
+					f.funcText.AddSpaceToSizeX(100)
+					f.button.SetFillColor(downloadColor, downloadColor)
+				}
+			},
+		)
 	}
 }
 
