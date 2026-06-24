@@ -38,7 +38,7 @@
 7. id是由uuid随机生成，不与设备硬件地址等敏感信息相关，每次启动时随机生成
 
 ## 通信指令集
-
+该指令集命令都包含命令前缀[GMStudio:GMSenderOrder:Broadcast]，以确保指令的唯一性和可识别性，避免识别其他软件的广播指令
 |指令名|编码|类型|结构|备注|
 |-----|----|----|----|---|
 |询问master|001|广播|code[0-2] 编码<br>wait[3-7] 等待剩余秒数<br>struct{<br>&emsp;ip string // 来源ip<br>&emsp;port string // 来源点对点通信端口<br>&emsp;id string // 来源id<br>}|任意节点发出|
@@ -48,6 +48,37 @@
 |回复公开文件列表|101|广播|code[0-2] 编码<br>struct{<br>&emsp;ip string // 来源ip<br>&emsp;port string // 来源点对点通信端口<br>&emsp;id string // 来源id<br>&emsp;FileName string // 文件名<br>}|master发出|
 |公开自己的文件|110|udp|code[0-2] 编码<br>struct{<br>&emsp;ip string // 来源ip<br>&emsp;port string // 来源点对点通信端口<br>&emsp;id string // 来源id<br>&emsp;FileName string // 文件名<br>}|节点发出|
 |删除自己的公开文件|111|udp|code[0-2] 编码<br>struct{<br>&emsp;ip string // 来源ip<br>&emsp;port string // 来源点对点通信端口<br>&emsp;id string // 来源id<br>&emsp;FileName string // 文件名<br>}|节点发出|
+
+## 端到端加密
+本软件默认支持端到端流式加解密，无需额外配置，端到端流式加解密架构如下：
+┌─────────────────────────────────────────────────────────────────┐
+│ 1. 应用启动时                                                    │
+│    └─▶ 生成ECDH密钥对 (finder.keyManager)                       │
+├─────────────────────────────────────────────────────────────────┤
+│ 2. 公开文件时                                                    │
+│    └─▶ File.PubKey = keyManager.publicKeyBase64()               │
+├─────────────────────────────────────────────────────────────────┤
+│ 3. 下载请求                                                      │
+│    ├─▶ 客户端生成临时密钥对                                       │
+│    ├─▶ 发送 (filename, clientPubKey)                            │
+│    └─▶ 服务端计算共享密钥                                         │
+├─────────────────────────────────────────────────────────────────┤
+│ 4. 文件传输                                                      │
+│    ├─▶ 服务端：io.Copy(encryptedConn, file)                    │
+│    │      └─▶ ChaCha20-Poly1305流式加密                         │
+│    └─▶ 客户端：io.Copy(file, encryptedConn)                     │
+│           └─▶ ChaCha20-Poly1305流式解密                         │
+└─────────────────────────────────────────────────────────────────┘
+
+加密细节如下：
+|特性|实现|
+|---|---|
+|密钥交换|ECDH X25519|
+|加密算法|ChaCha20-Poly1305|
+|认证加密|Poly1305消息认证|
+|前向保密|每次下载使用临时密钥对|
+|Nonce管理|随机初始化，递增更新|
+
 
 ## 渲染
 
