@@ -346,7 +346,6 @@ func (f *finder) handlerDownLoad(conn net.Conn) {
 		sizeBuf[5] = byte(fileSize >> 40)
 		sizeBuf[6] = byte(fileSize >> 48)
 		sizeBuf[7] = byte(fileSize >> 56)
-		fmt.Println("sendBuf:", sizeBuf)
 		if _, err := encryptedConn.Write(sizeBuf); err != nil {
 			fmt.Printf("发送文件大小失败: %v\n", err)
 			return
